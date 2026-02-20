@@ -17,22 +17,29 @@
                 <img id="chicken-img" src="assets/images/Front.jpeg" alt="大湾鸡" class="chicken-img">
             </div>
 
-            <div class="controls">
-                <button id="talk-btn" class="control-btn">跟大湾鸡说话</button>
-                <button id="animate-btn" class="control-btn">让大湾鸡动起来</button>
-                <button id="switch-view-btn" class="control-btn">换角度看大湾鸡</button>
-            </div>
-
             <div class="speech-bubble" id="speech-bubble">
                 <p id="speech-text">你好！我是大湾鸡，很高兴见到你！</p>
             </div>
 
             <div id="chat-log" class="chat-log"></div>
 
-            <div class="mic-controls">
-                <button id="mic-btn" class="control-btn mic-btn">
-                    🎤 按住和大湾鸡说话
-                </button>
+            <!-- Consolidated Controls -->
+            <div class="consolidated-controls">
+                <div class="voice-interaction-section">
+                    <button id="voice-interact-btn" class="control-btn voice-interact-btn">
+                        <span class="btn-icon">🎤</span> 语音互动
+                    </button>
+                    <div class="asr-status-display">
+                        <span class="status-indicator" id="asr-status-indicator"></span>
+                        <span class="status-text" id="asr-status-text">状态：未知</span>
+                    </div>
+                </div>
+
+                <div class="image-interaction-section">
+                    <button id="image-interact-btn" class="control-btn image-interact-btn">
+                        <span class="btn-icon">🐔</span> 形象互动
+                    </button>
+                </div>
             </div>
         </main>
 

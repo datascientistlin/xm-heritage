@@ -1,11 +1,12 @@
 document.addEventListener('DOMContentLoaded', function() {
     // 获取DOM元素
     const chickenImg = document.getElementById('chicken-img');
-    const talkBtn = document.getElementById('talk-btn');
-    const animateBtn = document.getElementById('animate-btn');
-    const switchViewBtn = document.getElementById('switch-view-btn');
+    const voiceInteractBtn = document.getElementById('voice-interact-btn');
+    const imageInteractBtn = document.getElementById('image-interact-btn');
     const speechText = document.getElementById('speech-text');
     const speechBubble = document.getElementById('speech-bubble');
+    const asrStatusIndicator = document.getElementById('asr-status-indicator');
+    const asrStatusText = document.getElementById('asr-status-text');
 
     // 大湾鸡图片数组
     const chickenViews = [
@@ -20,6 +21,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // WebSocket connection
     let ws;
     let isRecording = false;
+    let isPushToTalkActive = false; // Track push-to-talk state
+    let audioContext;
+    let processor;
+    let inputStream;
+    let pressTimer = null;
+
+    // Track the last interaction time to prevent random speech during active conversation
+    let lastInteractionTime = Date.now();
 
     // 预设的大湾鸡话语
     const chickenResponses = [
@@ -128,8 +137,22 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // 更新最后交互时间
+    function updateLastInteraction() {
+        lastInteractionTime = Date.now();
+    }
+
+    // 检查是否可以随机说话
+    function canSpeakRandomly() {
+        const now = Date.now();
+        const timeSinceLastInteraction = now - lastInteractionTime;
+        // 只有在至少30秒没有交互的情况下才允许随机说话
+        return timeSinceLastInteraction > 30000;
+    }
+
     // 让大湾鸡说话
     function chickenSaySomething() {
+        updateLastInteraction(); // 更新最后交互时间
         const randomIndex = Math.floor(Math.random() * chickenResponses.length);
         const response = chickenResponses[randomIndex];
         speak(response);
@@ -137,6 +160,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 切换大湾鸡视图
     function switchChickenView() {
+        updateLastInteraction(); // 更新最后交互时间
         currentViewIndex = (currentViewIndex + 1) % chickenViews.length;
         chickenImg.src = chickenViews[currentViewIndex];
 
@@ -166,6 +190,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 播放动画效果
     function playAnimation() {
+        updateLastInteraction(); // 更新最后交互时间
         // 随机选择一种动画
         const animations = ['bounce', 'wiggle', 'eye-blink', 'talk-animation'];
         const randomAnimation = animations[Math.floor(Math.random() * animations.length)];
@@ -189,50 +214,57 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 点击大湾鸡图片的交互
     chickenImg.addEventListener('click', function() {
+        updateLastInteraction(); // 更新最后交互时间
         playAnimation();
     });
 
     // 触摸事件（移动端优化）
     chickenImg.addEventListener('touchstart', function(e) {
         e.preventDefault(); // 防止默认的触摸行为
+        updateLastInteraction(); // 更新最后交互时间
         playAnimation();
     });
 
-    // 按钮事件监听器
-    talkBtn.addEventListener('click', chickenSaySomething);
+    // 更新ASR状态显示
+    function updateASRStatus(status) {
+        const statusClasses = {
+            'connected': 'connected',
+            'connecting': 'connecting',
+            'disconnected': 'disconnected'
+        };
 
-    animateBtn.addEventListener('click', playAnimation);
+        // 移除所有状态类
+        Object.values(statusClasses).forEach(cls => {
+            asrStatusIndicator.classList.remove(cls);
+        });
 
-    switchViewBtn.addEventListener('click', switchChickenView);
-
-    // 初始化加载第一张图片
-    chickenImg.onload = function() {
-        chickenImg.style.opacity = '1';
-    };
-
-    // 页面加载时说一句欢迎语
-    setTimeout(() => {
-        speak("你好！我是大湾鸡，很高兴见到你！");
-    }, 1000);
-
-    // 定期随机说话（每30秒一次，增加趣味性）
-    setInterval(() => {
-        // 只有在没有其他语音正在播放时才说话
-        if (!speechSynthesis.speaking) {
-            const randomChance = Math.random();
-            if (randomChance > 0.7) { // 30%概率说话
-                chickenSaySomething();
-            }
+        // 添加对应状态类
+        if (status in statusClasses) {
+            asrStatusIndicator.classList.add(statusClasses[status]);
         }
-    }, 30000);
 
+        // 更新文本
+        const statusTexts = {
+            'connected': '已连接',
+            'connecting': '连接中...',
+            'disconnected': '未连接'
+        };
+
+        asrStatusText.textContent = `状态：${statusTexts[status] || '未知'}`;
+    }
+
+    // 初始化连接状态为连接中
+    updateASRStatus('connecting');
+
+    // 连接到对话WebSocket
     function connectConversationWS() {
-        // For testing purposes, we'll connect to the WebSocket server on localhost:3001
-        // Note: In a production environment, you might want to use a relative URL
+        // 对于测试目的，我们将连接到本地运行在端口3001上的WebSocket服务器
+        // 注意：在生产环境中，您可能想要使用相对URL
         ws = new WebSocket("ws://localhost:3001");
 
         ws.onopen = () => {
             console.log("🎤 Conversation WS connected");
+            updateASRStatus('connected'); // 连接成功时更新状态
         };
 
         ws.onmessage = e => {
@@ -242,30 +274,36 @@ document.addEventListener('DOMContentLoaded', function() {
             if (msg.type === "user") {
                 console.log('Adding user message to chat:', msg.text);
                 addChat("user", msg.text);  // 添加用户消息到聊天窗口
+                updateLastInteraction(); // 收到用户消息时更新最后交互时间
             } else if (msg.type === "assistant") {
                 console.log('Adding assistant message to chat:', msg.text);
                 addChat("assistant", msg.text);
                 playAudioFromBase64(msg.audio);
+                updateLastInteraction(); // 收到助手消息时更新最后交互时间
             }
         };
 
         ws.onclose = () => {
             console.log("Connection lost, reconnecting...");
-            setTimeout(connectConversationWS, 3000);
+            updateASRStatus('disconnected'); // 断开连接时更新状态
+
+            // 实现指数退避重连策略
+            setTimeout(() => {
+                console.log("Attempting to reconnect...");
+                updateASRStatus('connecting'); // 更新状态为连接中
+                connectConversationWS();
+            }, 3000);
         };
 
         ws.onerror = (err) => {
             console.error("WS error:", err);
+            updateASRStatus('disconnected'); // 错误时更新状态
         };
     }
 
     connectConversationWS();
 
     // Microphone capture
-    let audioContext;
-    let processor;
-    let inputStream;
-
     async function startMic() {
         inputStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
@@ -291,33 +329,54 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     }
 
-    // Push-to-talk button
-    const micBtn = document.getElementById("mic-btn");
-
-    micBtn.addEventListener("mousedown", async () => {
-        if (!audioContext) await startMic();
-        isRecording = true;
-        micBtn.textContent = "🎤 松开结束";
+    // 语音互动按钮事件处理器
+    voiceInteractBtn.addEventListener('mousedown', (e) => {
+        updateLastInteraction(); // 更新最后交互时间
+        // 首先设置一个定时器，如果按下超过阈值时间则认为是长按
+        pressTimer = setTimeout(async () => {
+            // 长按逻辑 - 启动录音
+            if (!audioContext) await startMic();
+            isRecording = true;
+            isPushToTalkActive = true;
+            voiceInteractBtn.innerHTML = '<span class="btn-icon">🎤</span> 松开结束';
+            voiceInteractBtn.classList.add('recording');
+        }, 300); // 300ms作为长按阈值
     });
 
-    micBtn.addEventListener("mouseup", () => {
-        isRecording = false;
-        micBtn.textContent = "🎤 按住和大湾鸡说话";
-        // 当松开按钮时，发送一个小延迟以确保最后的音频数据被发送
-        setTimeout(() => {
-            // 可以发送一个心跳信号以表示用户交互完成
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'user_done_speaking' }));
-            }
-        }, 100);
+    voiceInteractBtn.addEventListener('mouseup', () => {
+        if (pressTimer) clearTimeout(pressTimer);
+
+        if (isPushToTalkActive) {
+            // 如果之前是长按时激活的录音
+            isRecording = false;
+            isPushToTalkActive = false;
+            voiceInteractBtn.innerHTML = '<span class="btn-icon">🎤</span> 语音互动';
+            voiceInteractBtn.classList.remove('recording');
+
+            // 发送信号表示录音结束
+            setTimeout(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'user_done_speaking' }));
+                }
+            }, 100);
+        } else {
+            // 短按逻辑 - 直接让大湾鸡说话
+            updateLastInteraction(); // 更新最后交互时间
+            chickenSaySomething();
+        }
     });
 
     // 添加鼠标离开按钮区域的处理（以防用户拖拽鼠标离开按钮区域后松开）
-    micBtn.addEventListener("mouseleave", () => {
-        if (isRecording) {
+    voiceInteractBtn.addEventListener('mouseleave', () => {
+        if (pressTimer) clearTimeout(pressTimer);
+
+        if (isPushToTalkActive) {
             isRecording = false;
-            micBtn.textContent = "🎤 按住和大湾鸡说话";
-            // 当鼠标离开按钮时，发送一个小延迟以确保最后的音频数据被发送
+            isPushToTalkActive = false;
+            voiceInteractBtn.innerHTML = '<span class="btn-icon">🎤</span> 语音互动';
+            voiceInteractBtn.classList.remove('recording');
+
+            // 发送信号表示录音结束
             setTimeout(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ type: 'user_done_speaking' }));
@@ -325,6 +384,44 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 100);
         }
     });
+
+    // 图像互动按钮 - 循环切换动画和视图
+    let lastImageAction = 'animation'; // Track last action to alternate
+
+    imageInteractBtn.addEventListener('click', () => {
+        updateLastInteraction(); // 更新最后交互时间
+        if (lastImageAction === 'animation') {
+            // 执行动画
+            playAnimation();
+            lastImageAction = 'view'; // Next action will be to switch view
+        } else {
+            // 切换视图
+            switchChickenView();
+            lastImageAction = 'animation'; // Next action will be to play animation
+        }
+    });
+
+    // 初始化加载第一张图片
+    chickenImg.onload = function() {
+        chickenImg.style.opacity = '1';
+    };
+
+    // 页面加载时说一句欢迎语
+    setTimeout(() => {
+        updateLastInteraction(); // 更新最后交互时间
+        speak("你好！我是大湾鸡，很高兴见到你！");
+    }, 1000);
+
+    // 重写定期随机说话的逻辑
+    setInterval(() => {
+        // 只有在没有活动交互的情况下才随机说话
+        if (!isRecording && canSpeakRandomly() && !speechSynthesis.speaking) {
+            const randomChance = Math.random();
+            if (randomChance > 0.7) { // 30%概率说话
+                chickenSaySomething();
+            }
+        }
+    }, 30000); // 每30秒检查一次是否可以随机说话
 
     // Chat UI Helpers
     const chatLog = document.getElementById("chat-log");
@@ -350,7 +447,4 @@ document.addEventListener('DOMContentLoaded', function() {
         const audio = new Audio(URL.createObjectURL(blob));
         audio.play();
     }
-
-
-    
 });

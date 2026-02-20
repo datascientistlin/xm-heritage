@@ -166,23 +166,78 @@ footer {
     45%, 55% { transform: scaleY(0.1); }
 }
 
-/* Microphone button specific styles */
-.mic-controls {
+/* Consolidated Controls Layout */
+.consolidated-controls {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    gap: 20px;
     width: 100%;
     margin: 20px 0;
 }
 
-.mic-btn {
-    background: linear-gradient(to bottom, #ff6b6b, #ff5252);
-    min-width: 250px;
-    font-size: 1.2rem;
-    padding: 18px 30px;
+.voice-interaction-section, .image-interaction-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
 }
 
-.mic-btn:active {
+.voice-interaction-section {
+    margin-bottom: 10px;
+}
+
+.asr-status-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: #555;
+}
+
+.status-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #ccc; /* 默认灰色 */
+}
+
+.status-indicator.connected {
+    background-color: #4CAF50; /* 绿色 - 已连接 */
+}
+
+.status-indicator.connecting {
+    background-color: #FFC107; /* 黄色 - 连接中 */
+    animation: pulse 1.5s infinite;
+}
+
+.status-indicator.disconnected {
+    background-color: #F44336; /* 红色 - 已断开 */
+}
+
+.voice-interact-btn.recording {
     background: linear-gradient(to bottom, #ff5252, #e53e3e);
+    animation: pulse-background 1s infinite;
+}
+
+@keyframes pulse-background {
+    0% { opacity: 1; }
+    50% { opacity: 0.85; }
+    100% { opacity: 1; }
+}
+
+.voice-interact-btn, .image-interact-btn {
+    min-width: 220px;
+    font-size: 1.2rem;
+    padding: 18px 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.btn-icon {
+    font-size: 1.3rem;
 }
 
 @media (max-width: 600px) {

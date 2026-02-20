@@ -1,9 +1,13 @@
 import { createASRConnection } from "./asr.js";
 import { qwenChat } from "./chat.js";
 import fetch from "node-fetch";
+import { checkAndSendMessage, cleanupClientResources } from "../utils/ws-utils.js";
 
 // 为每个WebSocket客户端维护独立的历史记录
 const clientHistories = new Map();
+
+// 用于跟踪每个客户端的最后AI回复时间和内容，以防止重复
+const lastAIReplyInfo = new Map();
 
 export function startConversation(wsClient) {
   // 为当前客户端创建唯一标识符
@@ -44,37 +48,17 @@ export function startConversation(wsClient) {
 
     console.log('WebSocket当前状态码:', wsClient.readyState, 'OPEN状态码:', wsClient.OPEN);
 
-    // 改进连接状态检查逻辑，增加重试机制
-    let attempts = 0;
-    const maxAttempts = 3;
-    const checkAndSendMessage = () => {
-      if (wsClient.readyState === wsClient.OPEN) {
-        // 向前端发送用户语音转文字结果
-        try {
-          wsClient.send(JSON.stringify({
-              type: "user",
-              text: userText
-          }));
-          console.log('成功发送用户消息到前端:', userText);
-        } catch (error) {
-          console.error('发送用户消息到前端失败:', error);
-          return false;
-        }
-        return true;
-      } else if (attempts < maxAttempts) {
-        attempts++;
-        console.log(`WebSocket未连接，第${attempts}次尝试延迟发送...`);
-        setTimeout(checkAndSendMessage, 500); // 延迟500ms后重试
-        return false;
-      } else {
-        console.warn('WebSocket客户端未处于OPEN状态，状态码:', wsClient.readyState);
-        return false;
-      }
-    };
+    // 向前端发送用户语音转文字结果
+    const userMessageSent = await checkAndSendMessage(wsClient, {
+      type: "user",
+      text: userText
+    });
 
-    if (!checkAndSendMessage()) {
-      return; // 如果连接状态检查失败，则退出
+    if (!userMessageSent) {
+      console.warn('无法发送用户消息到前端');
+      return;
     }
+    console.log('成功发送用户消息到前端:', userText);
 
     // 将用户输入添加到该客户端的历史记录中
     history.push({ role: "user", content: userText });
@@ -88,84 +72,66 @@ export function startConversation(wsClient) {
 
       console.log('【DEBUG-CONV】从AI模型收到的回复:', reply);
 
-      // 再次检查WebSocket连接状态，使用相同的重试逻辑
-      let aiReplyAttempts = 0;
-      const checkAndSendAIReply = async () => {
-        if (wsClient.readyState === wsClient.OPEN) {
-          try {
-            // 将AI回复添加到该客户端的历史记录中
-            history.push({ role: "assistant", content: reply });
-            clientHistories.set(clientId, history); // 更新存储的历史记录
+      // 检查是否在短时间内收到了相同的AI回复（防止ASR被重复触发）
+      const now = Date.now();
+      const clientLastReply = lastAIReplyInfo.get(clientId);
 
-            // TTS（复用你已有逻辑）
-            const ttsResp = await fetch("http://localhost:3000/api/tts", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ text: reply })
-            });
-
-            const audio = await ttsResp.arrayBuffer();
-
-            wsClient.send(JSON.stringify({
-              type: "assistant",
-              text: reply,
-              audio: Buffer.from(audio).toString("base64")
-            }));
-
-            console.log('已发送AI回复到前端');
-          } catch (ttsError) {
-            console.error('发送AI回复到前端失败:', ttsError);
-
-            // 即使TTS失败，也要尝试发送文本回复
-            if (wsClient.readyState === wsClient.OPEN) {
-              try {
-                wsClient.send(JSON.stringify({
-                  type: "assistant",
-                  text: reply,
-                  audio: ""
-                }));
-                console.log('已发送AI文本回复到前端');
-              } catch (textError) {
-                console.error('发送AI文本回复也失败了:', textError);
-              }
-            }
-          }
-        } else if (aiReplyAttempts < maxAttempts) {
-          aiReplyAttempts++;
-          console.log(`WebSocket未连接，第${aiReplyAttempts}次尝试发送AI回复...`);
-          setTimeout(checkAndSendAIReply, 500); // 延迟500ms后重试
-        } else {
-          console.warn('WebSocket客户端在AI处理后已关闭或状态异常，无法发送回复');
+      if (clientLastReply) {
+        // 如果距离上次回复不到2秒且内容相同，则跳过此次回复
+        if (now - clientLastReply.timestamp < 2000 && clientLastReply.content === reply) {
+          console.log('检测到短时间内相同的AI回复，跳过发送:', reply);
+          return;
         }
-      };
+      }
 
-      await checkAndSendAIReply();
+      // 更新最后AI回复信息
+      lastAIReplyInfo.set(clientId, {
+        content: reply,
+        timestamp: now
+      });
+
+      // 清理超过5秒的旧记录，避免内存泄漏
+      for (let [key, value] of lastAIReplyInfo.entries()) {
+        if (now - value.timestamp > 5000) {
+          lastAIReplyInfo.delete(key);
+        }
+      }
+
+      // 发送AI回复到前端
+      const ttsResp = await fetch("http://localhost:3000/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: reply })
+      });
+
+      const audio = await ttsResp.arrayBuffer();
+
+      const aiMessageSent = await checkAndSendMessage(wsClient, {
+        type: "assistant",
+        text: reply,
+        audio: Buffer.from(audio).toString("base64")
+      });
+
+      if (!aiMessageSent) {
+        // 即使TTS失败，也要尝试发送文本回复
+        await checkAndSendMessage(wsClient, {
+          type: "assistant",
+          text: reply,
+          audio: ""
+        });
+        console.log('已发送AI文本回复到前端');
+      } else {
+        console.log('已发送AI回复到前端');
+      }
     } catch (error) {
       console.error('处理AI回复时出错:', error);
 
-      // 尝试发送错误消息到前端（如果连接可用），使用重试逻辑
-      let errorAttempts = 0;
-      const sendErrorMessage = () => {
-        if (wsClient.readyState === wsClient.OPEN) {
-          try {
-            wsClient.send(JSON.stringify({
-              type: "assistant",
-              text: "抱歉，我现在有点忙，稍后再聊好吗？",
-              audio: ""
-            }));
-          } catch (sendError) {
-            console.error('发送错误消息也失败了:', sendError);
-          }
-        } else if (errorAttempts < maxAttempts) {
-          errorAttempts++;
-          console.log(`WebSocket未连接，第${errorAttempts}次尝试发送错误消息...`);
-          setTimeout(sendErrorMessage, 500); // 延迟500ms后重试
-        } else {
-          console.error('无法发送错误消息到前端，WebSocket连接不可用');
-        }
-      };
-
-      sendErrorMessage();
+      // 尝试发送错误消息到前端（如果连接可用）
+      await checkAndSendMessage(wsClient, {
+        type: "assistant",
+        text: "抱歉，我现在有点忙，稍后再聊好吗？",
+        audio: ""
+      });
     }
   });
 
@@ -184,7 +150,7 @@ export function startConversation(wsClient) {
         asrWS.close();
       }
       // 连接断开时清理历史记录
-      clientHistories.delete(clientId);
+      cleanupClientResources(clientHistories, lastAIReplyInfo, clientId);
     },
     sendAudioData: (data) => {
       if (asrWS.sendAudioData) {
