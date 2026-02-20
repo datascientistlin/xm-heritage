@@ -1,4 +1,0 @@
-::1 - - [19/Feb/2026 15:58:54] "GET /js/script.js HTTP/1.1" 304 -
-::1 - - [19/Feb/2026 15:59:12] "GET /css/style.css HTTP/1.1" 304 -
-::1 - - [19/Feb/2026 15:59:12] code 404, message File not found
-::1 - - [19/Feb/2026 15:59:12] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -

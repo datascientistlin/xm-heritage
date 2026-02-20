@@ -9,9 +9,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 大湾鸡图片数组
     const chickenViews = [
-        'img/Front.jpeg',
-        'img/Back.jpeg',
-        'img/Side.jpeg'
+        'assets/images/Front.jpeg',
+        'assets/images/Back.jpeg',
+        'assets/images/Side.jpeg'
     ];
 
     // 当前显示的图片索引
@@ -227,6 +227,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 30000);
 
     function connectConversationWS() {
+        // For testing purposes, we'll connect to the WebSocket server on localhost:3001
+        // Note: In a production environment, you might want to use a relative URL
         ws = new WebSocket("ws://localhost:3001");
 
         ws.onopen = () => {

@@ -2,12 +2,16 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import dotenv from "dotenv";
+import chatRoutes from './routes/chatRoutes.js'; // Import the new routes
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Use the chat routes
+app.use('/api', chatRoutes);
 
 app.post("/api/tts", async (req, res) => {
   const { text } = req.body;
