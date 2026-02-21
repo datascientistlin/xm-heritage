@@ -32,6 +32,14 @@ const config = {
   development: {
     enableLogging: process.env.NODE_ENV !== 'production',
     logLevel: process.env.LOG_LEVEL || 'info'
+  },
+
+  // Logging settings
+  logging: {
+    enableFileLogging: true,
+    logDir: './logs',
+    maxFiles: 7,
+    maxSize: '10m'
   }
 };
 

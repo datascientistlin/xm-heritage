@@ -4,10 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "concurrently \"npm run backend\" \"npm run ws\" \"npm run frontend\"",
-    "backend": "cd backend && node server.js",
-    "ws": "cd backend && node services/ws-server.js",
-    "frontend": "cd frontend && http-server -p 8000 -c-1"
+    "dev": "concurrently -k -r \"npm run backend:dev\" \"npm run ws:dev\" \"npm run frontend:dev\"",
+    "backend:dev": "nodemon --config nodemon.json backend/server.js",
+    "ws:dev": "nodemon --config nodemon.json backend/services/ws-server.js",
+    "frontend:dev": "http-server frontend -p 8000 -c-1",
+    "backend": "node backend/server.js",
+    "ws": "node backend/services/ws-server.js",
+    "frontend": "http-server frontend -p 8000 -c-1",
+    "reset": "kill-port 3000 3001 8000"
   },
   "keywords": [],
   "author": "",
@@ -15,14 +19,16 @@
   "type": "module",
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "http-server": "^14.1.1"
+    "http-server": "^14.1.1",
+    "kill-port": "^2.0.1",
+    "nodemon": "^3.1.14"
   },
   "dependencies": {
-    "express": "^4.18.2",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "node-fetch": "^2.6.7",
     "uuid": "^13.0.0",
-    "ws": "^8.19.0",
-    "node-fetch": "^2.6.7"
+    "ws": "^8.19.0"
   }
 }

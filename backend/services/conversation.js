@@ -1,189 +1,130 @@
-import { createASRConnection } from "./asr.js";
-import { qwenChat } from "./chat.js";
+/**
+ * AI 对话服务模块
+ * 处理与通义千问 AI 的交互，包括对话生成和儿童安全过滤
+ */
+
 import fetch from "node-fetch";
-import { checkAndSendMessage, cleanupClientResources } from "../utils/ws-utils.js";
+import config from "../config/appConfig.js";
+import logger from "../utils/logger.js";
 
-// 为每个WebSocket客户端维护独立的历史记录
-const clientHistories = new Map();
+/**
+ * 通义千问 AI 对话函数
+ * @param {Array<{role: string, content: string}>} history - 对话历史记录
+ * @returns {Promise<string>} AI 回复文本
+ */
+export async function qwenChat(history) {
+  // 儿童安全检查 - 验证输入内容
+  const lastUserMessage = history[history.length - 1];
 
-// 用于跟踪每个客户端的最后AI回复时间和内容，以防止重复
-const lastAIReplyInfo = new Map();
+  if (lastUserMessage && lastUserMessage.role === 'user') {
+    const userInput = lastUserMessage.content.toLowerCase();
 
-export function startConversation(wsClient) {
-  // 为当前客户端创建唯一标识符
-  const clientId = wsClient._socket ? wsClient._socket.remoteAddress + ':' + wsClient._socket.remotePort : Date.now();
+    // 过滤不适宜儿童的内容
+    const inappropriatePatterns = [
+      /kill/i,
+      /hurt/i,
+      /attack/i,
+      /bad/i,
+      /naughty/i
+    ];
 
-  // 初始化该客户端的对话历史
-  clientHistories.set(clientId, []);
-  let history = clientHistories.get(clientId);
-
-  console.log("Creating new ASR connection for WebSocket client with ID:", clientId);
-
-  // 保存原始的onText回调函数
-  const asrWS = createASRConnection(async (asrResult) => {
-    // Handle both old and new formats of ASR result
-    let userText;
-
-    if (typeof asrResult === 'object' && asrResult.text !== undefined) {
-      // New format with utterance ID
-      userText = asrResult.text;
-    } else {
-      // Old format for backward compatibility
-      userText = asrResult;
+    for (const pattern of inappropriatePatterns) {
+      if (pattern.test(userInput)) {
+        return "对不起，我们不能谈论这个话题。让我们聊聊更有趣的事情吧！";
+      }
     }
+  }
 
-    console.log("ASR回调函数被调用，接收到文本:", userText);
+  // 使用传入的完整历史记录
+  const currentHistory = [...history];
 
-    // 确保WebSocket客户端对象存在
-    if (!wsClient) {
-      console.error('WebSocket客户端对象不存在');
-      return;
-    }
-
-    // 获取最新的历史记录（以防在异步期间被其他地方修改）
-    history = clientHistories.get(clientId) || [];
-
-    // 过滤掉可能的空白文本
-    if (!userText || userText.trim() === '') {
-      console.log('忽略空白的ASR识别结果');
-      return;
-    }
-
-    console.log('收到ASR识别结果:', userText);
-
-    // 检查WebSocket客户端是否存在且连接
-    if (!wsClient || typeof wsClient.readyState === 'undefined') {
-      console.error('WebSocket客户端状态无法检查');
-      return;
-    }
-
-    console.log('WebSocket当前状态码:', wsClient.readyState, 'OPEN状态码:', wsClient.OPEN);
-
-    // 向前端发送用户语音转文字结果
-    const userMessageSent = await checkAndSendMessage(wsClient, {
-      type: "user",
-      text: userText
-    });
-
-    if (!userMessageSent) {
-      console.warn('无法发送用户消息到前端');
-      return;
-    }
-    console.log('成功发送用户消息到前端:', userText);
-
-    // 将用户输入添加到该客户端的历史记录中
-    history.push({ role: "user", content: userText });
-    clientHistories.set(clientId, history); // 更新存储的历史记录
-
-    console.log('【DEBUG-CONV】准备发送给AI模型的输入:', userText);
-    console.log('【DEBUG-CONV】当前对话历史长度:', history.length);
-
-    try {
-      const reply = await qwenChat(history);
-
-      console.log('【DEBUG-CONV】从AI模型收到的回复:', reply);
-
-      // 检查是否在短时间内收到了相同的AI回复（防止ASR被重复触发）
-      const now = Date.now();
-      const clientLastReply = lastAIReplyInfo.get(clientId);
-
-      if (clientLastReply) {
-        // 如果距离上次回复不到2秒且内容相同，则跳过此次回复
-        if (now - clientLastReply.timestamp < 2000 && clientLastReply.content === reply) {
-          console.log('检测到短时间内相同的AI回复，跳过发送:', reply);
-          return;
+  const res = await fetch(
+    `${config.dashscope.baseUrl}/api/v1/services/aigc/text-generation/generation`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.dashscope.apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: config.dashscope.chatModel,
+        input: {
+          messages: [
+            {
+              role: "system",
+              content: `
+你是"大湾鸡"，一个温柔、耐心、儿童友好的小鸡朋友。
+- 用简单句子
+- 不说恐怖、暴力、成人内容
+- 多鼓励孩子
+- 不超过 2~3 句话
+- 如果孩子提出不适宜的话题，请温和地引导到安全话题
+- 重点回应孩子最新的一句话，不要重复之前说过的内容
+              `.trim()
+            },
+            ...currentHistory
+          ]
         }
-      }
-
-      // 更新最后AI回复信息
-      lastAIReplyInfo.set(clientId, {
-        content: reply,
-        timestamp: now
-      });
-
-      // 清理超过5秒的旧记录，避免内存泄漏
-      for (let [key, value] of lastAIReplyInfo.entries()) {
-        if (now - value.timestamp > 5000) {
-          lastAIReplyInfo.delete(key);
-        }
-      }
-
-      // 发送AI回复到前端
-      const ttsResp = await fetch("http://localhost:3000/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: reply })
-      });
-
-      const audio = await ttsResp.arrayBuffer();
-
-      const aiMessageSent = await checkAndSendMessage(wsClient, {
-        type: "assistant",
-        text: reply,
-        audio: Buffer.from(audio).toString("base64")
-      });
-
-      if (!aiMessageSent) {
-        // 即使TTS失败，也要尝试发送文本回复
-        await checkAndSendMessage(wsClient, {
-          type: "assistant",
-          text: reply,
-          audio: ""
-        });
-        console.log('已发送AI文本回复到前端');
-      } else {
-        console.log('已发送AI回复到前端');
-      }
-    } catch (error) {
-      console.error('处理AI回复时出错:', error);
-
-      // 尝试发送错误消息到前端（如果连接可用）
-      await checkAndSendMessage(wsClient, {
-        type: "assistant",
-        text: "抱歉，我现在有点忙，稍后再聊好吗？",
-        audio: ""
-      });
+      })
     }
-  });
+  );
 
-  // 为ASR WebSocket添加连接丢失处理
-  asrWS.onConnectionLost = () => {
-    console.log('ASR连接丢失，正在创建新的ASR连接...');
-    // 注意：这里可以实现重新连接逻辑，但这比较复杂，因为需要重新绑定所有的事件处理器
-    // 目前暂时记录问题，后续可扩展
-  };
+  if (!res.ok) {
+    logger.error(`DashScope API 请求失败: ${res.status} ${res.statusText}`);
+    const errorBody = await res.text();
+    logger.error('错误详情:', { errorBody });
+    throw new Error(`API请求失败: ${res.status} ${res.statusText}`);
+  }
 
-  // 返回包含asrWS及其所有方法的对象
-  return {
-    ...asrWS,
-    close: () => {
-      if (asrWS.close) {
-        asrWS.close();
+  const json = await res.json();
+
+  if (json.error) {
+    logger.error('DashScope API 错误:', { error: json.error });
+    throw new Error(`API错误: ${json.error.message}`);
+  }
+
+  // 安全地提取响应内容
+  let response = '';
+
+  try {
+    // 优先检查 choices 字段
+    if (json.output && json.output.choices && json.output.choices.length > 0) {
+      const firstChoice = json.output.choices[0];
+      if (firstChoice.message && firstChoice.message.content) {
+        response = firstChoice.message.content;
+      } else if (firstChoice.text) {
+        response = firstChoice.text;
       }
-      // 连接断开时清理历史记录
-      cleanupClientResources(clientHistories, lastAIReplyInfo, clientId);
-    },
-    sendAudioData: (data) => {
-      if (asrWS.sendAudioData) {
-        asrWS.sendAudioData(data);
-      }
-    },
-    isReady: () => {
-      if (asrWS.isReady) {
-        return asrWS.isReady();
-      }
-      return false;
-    },
-    sendEndSignal: () => {
-      if (asrWS.sendEndSignal) {
-        asrWS.sendEndSignal();
-      }
-    },
-    getState: () => {
-      if (asrWS.getState) {
-        return asrWS.getState();
-      }
-      return { readyToSendAudio: false };
     }
-  };
+
+    // 备选：检查 text 字段
+    if (!response && json.output && json.output.text) {
+      response = json.output.text;
+    }
+
+    // 备选：检查 content 字段
+    if (!response && json.output && json.output.content) {
+      if (typeof json.output.content === 'string') {
+        response = json.output.content;
+      } else if (json.output.content.text) {
+        response = json.output.content.text;
+      }
+    }
+
+    // 备选：检查 message 字段
+    if (!response && json.output && json.output.message) {
+      response = json.output.message.content || json.output.message.text || '';
+    }
+
+    if (!response) {
+      logger.error('无法从 API 响应中提取内容:', { response: json });
+      throw new Error('无法从 API 响应中提取内容');
+    }
+
+    return response;
+
+  } catch (error) {
+    logger.error('解析 AI 回复时出错:', { error });
+    throw error;
+  }
 }

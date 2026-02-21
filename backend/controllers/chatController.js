@@ -1,4 +1,5 @@
-import { qwenChat } from '../services/chat.js';
+import { qwenChat } from '../services/conversation.js';
+import logger from '../utils/logger.js';
 
 /**
  * Controller for handling chat interactions
@@ -20,7 +21,7 @@ export async function chatController(req, res) {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Chat controller error:', error);
+    logger.error('Chat controller error:', { error });
     res.status(500).json({
       error: 'Failed to process chat message',
       details: error.message

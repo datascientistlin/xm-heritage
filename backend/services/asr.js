@@ -1,19 +1,29 @@
+/**
+ * ASR (语音识别) 服务模块
+ * 处理与阿里云 DashScope ASR API 的 WebSocket 连接
+ * 支持实时语音识别，包括连接管理、状态转换、错误处理和重连逻辑
+ */
+
 import WebSocket from "ws";
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import logger from "../utils/logger.js";
 
-// 加载环境变量
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// 从 backend 目录加载 .env（向上走一级目录）
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 // 从环境变量获取API密钥
 const apiKey = process.env.DASHSCOPE_API_KEY;
 
 // 检查API密钥是否存在
 if (!apiKey) {
-  console.error('❌ 错误：未设置 DASHSCOPE_API_KEY 环境变量');
-  console.error('请在 backend/.env 文件中添加有效的API密钥');
+  logger.error('❌ 错误：未设置 DASHSCOPE_API_KEY 环境变量');
+  logger.error('请在 backend/.env 文件中添加有效的API密钥');
 } else {
-  console.log('✅ API密钥已配置');
+  logger.info('✅ API密钥已配置');
 }
 
 // 定义ASR任务状态枚举
@@ -77,7 +87,7 @@ export function createASRConnection(onText) {
   const setState = (newState) => {
     const oldState = state.taskState;
     state.taskState = newState;
-    console.log(`ASR task state changed: ${oldState} -> ${newState}`);
+    logger.info(`ASR task state changed: ${oldState} -> ${newState}`);
     state.lastActivityTime = Date.now();
   };
 
@@ -96,7 +106,7 @@ export function createASRConnection(onText) {
 
   // Start health monitoring when connection opens
   ws.on('open', () => {
-    console.log('ASR WebSocket: 连接到服务器');
+    logger.info('ASR WebSocket: 连接到服务器');
     state.connectionState = 'connected';
     setState(ASRTaskState.STARTING_TASK);
     state.taskStarted = false; // Will be set to true when task-started event occurs
@@ -116,10 +126,10 @@ export function createASRConnection(onText) {
       healthMonitor.healthCheckInterval = setInterval(() => {
         const now = Date.now();
         if (now - healthMonitor.lastActivityTime > 30000) { // 30 seconds no activity
-          console.warn('ASR connection appears inactive, checking state...');
+          logger.warn('ASR connection appears inactive, checking state...');
           if (ws.readyState === WebSocket.OPEN && state.taskState === ASRTaskState.STREAMING) {
             // Connection is open but no activity - might need attention
-            console.log('Still connected to ASR service, maintaining connection...');
+            logger.info('Still connected to ASR service, maintaining connection...');
 
             // Try sending a small ping to verify connection
             if (state.consecutiveFailedPings < state.maxConsecutiveFailedPings) {
@@ -127,17 +137,17 @@ export function createASRConnection(onText) {
                 // We can't send a ping directly with WS, so we'll just log and update timestamp
                 state.lastPingTime = now;
               } catch (err) {
-                console.error('Failed to ping ASR server:', err);
+                logger.error('Failed to ping ASR server:', { error: err });
                 state.consecutiveFailedPings++;
 
                 if (state.consecutiveFailedPings >= state.maxConsecutiveFailedPings) {
-                  console.error('Too many failed pings, closing connection for reconnection');
+                  logger.error('Too many failed pings, closing connection for reconnection');
                   ws.close(1000, 'Health check failed');
                 }
               }
             }
           } else if (ws.readyState !== WebSocket.OPEN) {
-            console.error('ASR connection closed unexpectedly');
+            logger.error('ASR connection closed unexpectedly');
             clearInterval(healthMonitor.healthCheckInterval);
           }
         }
@@ -156,14 +166,13 @@ export function createASRConnection(onText) {
     try {
       message = JSON.parse(data.toString());
     } catch (e) {
-      // This might be audio data or ping response, log and continue
-      console.log('Received non-JSON message from ASR service');
+      // This might be audio data or ping response, ignore
       return;
     }
 
     switch (message.header.event) {
       case 'task-started':
-        console.log('ASR WebSocket: 任务开始');
+        logger.info('ASR WebSocket: 任务开始');
         setState(ASRTaskState.STREAMING);
         state.taskStarted = true; // Mark that the task has officially started
         state.readyToSendAudio = true;
@@ -180,7 +189,6 @@ export function createASRConnection(onText) {
             // 320 bytes of silence at 16kHz is 20ms of audio data
             const silentFrame = new Uint8Array(320).fill(0);
             ws.send(silentFrame);
-            console.log('Sent keepalive audio frame');
           } else {
             // Stop the timer if not streaming anymore
             if (state.keepaliveTimer) {
@@ -194,7 +202,7 @@ export function createASRConnection(onText) {
       case 'result-generated':
         // 如果任务已经完成，忽略后续结果
         if (state.isFinished) {
-          console.log('任务已完成，忽略后续识别结果:', message.payload.output.sentence.text);
+          logger.info('任务已完成，忽略后续识别结果:', { text: message.payload.output.sentence.text });
           break;
         }
 
@@ -202,13 +210,13 @@ export function createASRConnection(onText) {
         const newText = message.payload.output.sentence.text;
         const sentenceEnd = message.payload.output.sentence.sentence_end; // 使用正确的字段名
 
-        console.log('ASR识别结果：', newText, '句子结束标志:', sentenceEnd);
+        logger.info("ASR识别结果", { newText, sentenceEnd });
 
         // 直接使用ASR返回的完整句子，无需进一步判断是否完整
         if (newText && newText.trim() !== '') {
           // 如果句子结束标志为true，则立即处理这个完整的句子
           if (sentenceEnd) {
-            console.log('检测到句子结束，立即触发回调函数:', newText);
+            logger.info('检测到句子结束，立即触发回调函数:', { text: newText });
             state.isProcessing = true;
 
             // Process the complete sentence directly
@@ -217,7 +225,7 @@ export function createASRConnection(onText) {
             // 检查是否正在结束，如果在结束过程中，暂存文本
             if (state.isEnding) {
               state.pendingFinalText = finalText;
-              console.log('正在结束过程中，暂存文本:', finalText);
+              logger.info('正在结束过程中，暂存文本:', { text: finalText });
             } else {
               // Include the utterance ID in the callback
               onText({ text: finalText, utteranceId: Date.now() + Math.random() });
@@ -233,22 +241,15 @@ export function createASRConnection(onText) {
             // 如果不是句子结束，只更新累积文本，不做处理
             // 在用户松开按钮时，会发送finish-task命令，这时会处理最终文本
             state.accumulatedText = newText;
-            console.log('非句子结束，更新累积文本:', state.accumulatedText);
-
-            // 关键修改：如果正在进行结束过程，则不发送中间结果到回调
-            if (!state.isEnding) {
-              // 可选：如果需要发送中间结果（比如部分结果），可以保留此功能
-              // 但在当前场景下，我们应该只在完整句子结束时才处理
-            }
           }
         }
 
         if (message.payload.usage) {
-          console.log('ASR任务计费时长（秒）：', message.payload.usage.duration);
+          logger.info('ASR任务计费时长（秒）:', { duration: message.payload.usage.duration });
         }
         break;
       case 'task-finished':
-        console.log('ASR任务完成');
+        logger.info('ASR任务完成');
 
         // Only update state if we're in a valid finishing state
         if (state.taskState === ASRTaskState.FINISHING || state.taskState === ASRTaskState.WAITING_FINAL) {
@@ -268,17 +269,17 @@ export function createASRConnection(onText) {
         // 如果有最终文本(pendingFinalText)，优先发送最终文本
         // 否则才发送累积的文本作为后备
         if (state.pendingFinalText && state.pendingFinalText.trim() !== '') {
-          console.log('任务结束，发送最终文本:', state.pendingFinalText);
+          logger.info('任务结束，发送最终文本:', { text: state.pendingFinalText });
           onText({ text: state.pendingFinalText, utteranceId: Date.now() + Math.random() });
           state.pendingFinalText = '';
         } else if (state.accumulatedText && state.accumulatedText.trim() !== '') {
-          console.log('任务结束，发送剩余累积文本:', state.accumulatedText);
+          logger.info('任务结束，发送剩余累积文本:', { text: state.accumulatedText });
           onText({ text: state.accumulatedText, utteranceId: Date.now() + Math.random() });
           state.accumulatedText = '';
         }
         break;
       case 'task-failed':
-        console.error('ASR任务失败：', message.header.error_message);
+        logger.error('ASR任务失败：', { error: message.header.error_message });
         setState(ASRTaskState.ERROR);
         state.hasError = true;
         state.lastErrorMessage = message.header.error_message;
@@ -293,13 +294,13 @@ export function createASRConnection(onText) {
 
         // 即使失败，也要发送累积的文本
         if (state.accumulatedText && state.accumulatedText.trim() !== '') {
-          console.log('发送失败前累积的文本:', state.accumulatedText);
+          logger.info('发送失败前累积的文本:', { text: state.accumulatedText });
           onText({ text: state.accumulatedText, utteranceId: Date.now() + Math.random() });
           state.accumulatedText = '';
         }
         break;
       default:
-        console.log('ASR未知事件：', message.header.event);
+        logger.info('ASR未知事件：', { event: message.header.event });
     }
   });
 
@@ -348,7 +349,7 @@ export function createASRConnection(onText) {
 
   // Enhanced error handling with retry logic
   ws.on('error', (error) => {
-    console.error('ASR WebSocket错误：', error);
+    logger.error('ASR WebSocket错误：', { error });
     setState(ASRTaskState.ERROR);
     state.hasError = true;
     state.lastErrorMessage = error.message;
@@ -367,7 +368,7 @@ export function createASRConnection(onText) {
 
     // 如果是认证错误，不要尝试重连
     if (error.message && error.message.includes('Authentication failed')) {
-      console.error('认证失败，不尝试重连');
+      logger.error('认证失败，不尝试重连');
       return;
     }
 
@@ -382,7 +383,7 @@ export function createASRConnection(onText) {
       state.reconnectAttempts++;
       // Use exponential backoff with jitter
       const delay = (state.reconnectAttempts * 2000) + Math.floor(Math.random() * 1000); // 2-3s, 4-5s, 6-7s
-      console.log(`Attempt ${state.reconnectAttempts}/${state.maxReconnectAttempts}: Reconnecting in ${delay}ms`);
+      logger.info(`Attempt ${state.reconnectAttempts}/${state.maxReconnectAttempts}: Reconnecting in ${delay}ms`);
 
       setTimeout(() => {
         // 通知父级连接丢失以便重新初始化 - this ensures frontend state is reset for new interaction
@@ -391,11 +392,11 @@ export function createASRConnection(onText) {
         }
       }, delay);
     } else {
-      console.error('Max reconnection attempts reached');
+      logger.error('Max reconnection attempts reached');
 
       // Even with error, send accumulated text if any
       if (state.accumulatedText && state.accumulatedText.trim() !== '') {
-        console.log('Sending accumulated text despite error:', state.accumulatedText);
+        logger.info('Sending accumulated text despite error:', { text: state.accumulatedText });
 
         // 尝试通知上层处理累积的文本
         if (typeof onText === 'function') {
@@ -407,7 +408,7 @@ export function createASRConnection(onText) {
 
   // Enhanced connection close handling with health monitoring cleanup
   ws.on('close', (code, reason) => {
-    console.log(`ASR WebSocket closed. Code: ${code}, Reason: ${reason}`);
+    logger.info(`ASR WebSocket closed. Code: ${code}, Reason: ${reason}`);
     setState(ASRTaskState.COMPLETED); // Use the correct task state enum
 
     // 清除文本超时定时器
@@ -430,7 +431,7 @@ export function createASRConnection(onText) {
 
     // Only reset certain states if not a normal completion
     if (code !== 1000) { // Normal closure
-      console.warn('Connection closed abnormally, checking if we need to reconnect');
+      logger.warn('Connection closed abnormally, checking if we need to reconnect');
 
       // 对于常见的网络错误，尝试重连
       if (code === 1006 || // Abnormal closure
@@ -438,7 +439,7 @@ export function createASRConnection(onText) {
           code === 1011 || // Internal error
           code === 1015) { // TLS handshake failure
 
-        console.log(`Detected connection issue (code: ${code}), attempting reconnection`);
+        logger.info(`Detected connection issue (code: ${code}), attempting reconnection`);
 
         // 计算重连延迟，使用指数退避算法带抖动
         const delay = (state.reconnectAttempts + 1) * 2000 + Math.floor(Math.random() * 1000);
@@ -449,10 +450,10 @@ export function createASRConnection(onText) {
           }
         }, delay);
       } else {
-        console.log(`Connection ended with code ${code}, not attempting reconnection`);
+        logger.info(`Connection ended with code ${code}, not attempting reconnection`);
       }
     } else {
-      console.log('Normal connection closure - this is expected after task completion, triggering reconnection');
+      logger.info('Normal connection closure - this is expected after task completion, triggering reconnection');
       // For normal closures (code 1000) after successful task completion, trigger reconnection
       // This is expected behavior from DashScope API after finish-task
       if (typeof ws.onConnectionLost === 'function') {
@@ -464,11 +465,11 @@ export function createASRConnection(onText) {
     }
 
     if (!state.taskStarted) {
-      console.error('ASR任务未启动，关闭连接');
+      logger.error('ASR任务未启动，关闭连接');
     } else if (!state.hasReceivedResults) {
-      console.warn('ASR连接关闭，但未收到任何识别结果');
+      logger.warn('ASR连接关闭，但未收到任何识别结果');
     } else {
-      console.log('ASR连接已关闭');
+      logger.info('ASR连接已关闭');
     }
     state.readyToSendAudio = false;
     state.isEnding = false;
@@ -480,24 +481,24 @@ export function createASRConnection(onText) {
 
   // Optimized sendEndSignal for faster state reset
   ws.sendEndSignal = () => {
-    console.log('Initiating ASR session end with finish-task command...');
+    logger.info('Initiating ASR session end with finish-task command...');
 
     // Guard 1: Prevent multiple end sequences
     if (state.isEnding) {
-      console.log('ASR session end already initiated, skipping duplicate request');
+      logger.info('ASR session end already initiated, skipping duplicate request');
       return;
     }
 
     // Guard 2: Check WebSocket is open
     if (ws.readyState !== WebSocket.OPEN) {
-      console.warn('⚠️ Ignoring finish-task: WebSocket not open, state:', ws.readyState);
+      logger.warn("Ignoring finish-task: WebSocket not open", { readyState: ws.readyState });
       state.isEnding = false;
       return;
     }
 
     // Guard 3: Check task was actually started
     if (!state.taskStarted) {
-      console.warn('⚠️ Ignoring finish-task: no active run-task (taskStarted=false)');
+      logger.warn('⚠️ Ignoring finish-task: no active run-task (taskStarted=false)');
       state.isEnding = false;
       return;
     }
@@ -507,14 +508,14 @@ export function createASRConnection(onText) {
       state.taskState !== ASRTaskState.STREAMING &&
       state.taskState !== ASRTaskState.WAITING_FINAL
     ) {
-      console.warn('⚠️ Ignoring finish-task: invalid state', state.taskState);
+      logger.warn('⚠️ Ignoring finish-task: invalid state', { state: state.taskState });
       state.isEnding = false;
       return;
     }
 
     // Guard 5: Check no error
     if (state.hasError) {
-      console.warn('⚠️ Ignoring finish-task: ASR has error');
+      logger.warn('⚠️ Ignoring finish-task: ASR has error');
       state.isEnding = false;
       return;
     }
@@ -529,7 +530,7 @@ export function createASRConnection(onText) {
     // Do NOT process any accumulated text here, as the final complete sentence will come from ASR
     // with sentence_end: true and will be processed in the result-generated handler
     if (state.accumulatedText && state.accumulatedText.trim() !== '') {
-      console.log('NOT processing accumulated text during end signal, waiting for final ASR result:', state.accumulatedText);
+      logger.info("NOT processing accumulated text during end signal", { accumulatedText: state.accumulatedText });
     }
 
     // Send finish-task command to properly end the ASR session
@@ -545,16 +546,16 @@ export function createASRConnection(onText) {
 
     // Set timeout to handle missing final result (800ms as suggested in requirements)
     state.textTimeout = setTimeout(() => {
-      console.log('Timeout waiting for final ASR result, checking for fallback');
+      logger.info('Timeout waiting for final ASR result, checking for fallback');
 
       // If there's accumulated text but no final result, use accumulated text as fallback
       if (state.accumulatedText && state.accumulatedText.trim() !== '') {
-        console.log('Using accumulated text as fallback:', state.accumulatedText);
+        logger.info('Using accumulated text as fallback:', { text: state.accumulatedText });
         onText({ text: state.accumulatedText, utteranceId: Date.now() + Math.random() });
         // Only clear accumulatedText after using it as fallback
         state.accumulatedText = '';
       } else {
-        console.log('No accumulated text to fallback to');
+        logger.info('No accumulated text to fallback to');
       }
 
       // Only reset to IDLE state after timeout if still in WAITING_FINAL state
@@ -573,11 +574,11 @@ export function createASRConnection(onText) {
     // Faster state reset for quicker reuse of the same connection
     // Reduce timeout from 1000ms to 300ms for faster reset
     setTimeout(() => {
-      console.log('Resetting ASR connection state for next session');
+      logger.info('Resetting ASR connection state for next session');
 
       // Process any pending final text if available (this comes from the final ASR result after finish-task)
       if (state.pendingFinalText) {
-        console.log('Processing pending final text:', state.pendingFinalText);
+        logger.info('Processing pending final text:', { text: state.pendingFinalText });
 
         // Clear the timeout since we got the final result
         if (state.textTimeout) {
@@ -609,10 +610,10 @@ export function createASRConnection(onText) {
         // Only set readyToSendAudio to true if we're in a valid state to receive audio
         if (state.taskState === ASRTaskState.IDLE) {
           // This will be set to true when a new task starts
-          console.log('ASR connection ready for next audio input when task starts');
+          logger.info('ASR connection ready for next audio input when task starts');
         }
       } else {
-        console.warn('Cannot reset ASR connection - WebSocket is closed');
+        logger.warn('Cannot reset ASR connection - WebSocket is closed');
 
         // If connection is closed, notify parent to recreate it
         if (typeof ws.onConnectionLost === 'function') {
@@ -633,21 +634,21 @@ export function createASRConnection(onText) {
       // Only send the audio data without interfering with the connection
       ws.send(audioChunk);
     } else if (ws.readyState !== WebSocket.OPEN) {
-      console.error('WebSocket未连接，无法发送音频数据');
+      logger.error('WebSocket未连接，无法发送音频数据');
       // Try to reinitialize if connection is lost
       if (typeof ws.onConnectionLost === 'function') {
         ws.onConnectionLost();
       }
     } else if (state.hasError) {
-      console.error('ASR连接有错误，无法发送音频数据');
+      logger.error('ASR连接有错误，无法发送音频数据');
     } else if (!state.readyToSendAudio) {
-      console.log('ASR尚未准备就绪，或正在结束会话，音频数据可能被忽略...');
+      logger.info('ASR尚未准备就绪，或正在结束会话，音频数据可能被忽略...');
       // Queue the audio data if possible
       if (typeof ws.queueAudioData === 'function') {
         ws.queueAudioData(audioChunk);
       }
     } else if (state.isEnding) {
-      console.log('ASR会话正在结束，音频数据被丢弃');
+      logger.info('ASR会话正在结束，音频数据被丢弃');
     }
   };
 
@@ -655,7 +656,6 @@ export function createASRConnection(onText) {
   ws.queueAudioData = (audioChunk) => {
     // In this implementation, we won't actively queue, but in a more complex scenario
     // you might want to store chunks temporarily and send them when ready
-    console.log('Queuing audio data for later transmission:', audioChunk ? 'received' : 'not received');
   };
 
   // Enhanced isReady method
@@ -670,7 +670,7 @@ export function createASRConnection(onText) {
   // Add a method to clear the accumulated text without processing it
   ws.clearAccumulatedText = () => {
     if (state.accumulatedText && state.accumulatedText.trim() !== '') {
-      console.log('Clearing accumulated text without processing:', state.accumulatedText);
+      logger.info('Clearing accumulated text without processing:', { text: state.accumulatedText });
       state.accumulatedText = '';
     }
   };
@@ -682,24 +682,24 @@ export function createASRConnection(onText) {
   ws.startNewTask = () => {
     // Check if WebSocket is open
     if (ws.readyState !== WebSocket.OPEN) {
-      console.warn('Cannot start new task: WebSocket not open');
+      logger.warn('Cannot start new task: WebSocket not open');
       return false;
     }
 
     // Check if task is already running
     if (state.taskStarted && state.taskState === ASRTaskState.STREAMING) {
-      console.log('Task already running, can proceed with audio');
+      logger.info('Task already running, can proceed with audio');
       return true;
     }
 
     // Check if we're in a valid state to start a new task
     if (state.taskState === ASRTaskState.ERROR) {
-      console.warn('Cannot start new task: ASR is in error state');
+      logger.warn('Cannot start new task: ASR is in error state');
       return false;
     }
 
     // Reset state for new task
-    console.log('Starting new ASR task for next conversation round');
+    logger.info('Starting new ASR task for next conversation round');
     state.taskStarted = false;
     state.accumulatedText = '';
     state.pendingFinalText = '';

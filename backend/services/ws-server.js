@@ -1,9 +1,18 @@
 import { WebSocketServer } from "ws";
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// 加载环境变量 - 始终从 backend 目录加载 .env
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+
 import { createASRConnection } from "./asr.js";
-import { qwenChat } from "./chat.js";
+import { qwenChat } from "./conversation.js";
 import fetch from "node-fetch";
 import { calculateSimilarity, findLongestCommonPrefix, cleanTextForComparison } from "../utils/text-utils.js";
 import { checkAndSendMessage, cleanupClientResources } from "../utils/ws-utils.js";
+import logger from "../utils/logger.js";
 
 // 为每个WebSocket客户端维护独立的历史记录
 const clientHistories = new Map();
@@ -20,7 +29,7 @@ const clientCurrentUtteranceIds = new Map();
 const wss = new WebSocketServer({ port: 3001 });
 
 wss.on("connection", client => {
-  console.log("🎤 Client connected for audio conversation");
+  logger.info("🎤 Client connected for audio conversation");
 
   // Track client-specific state
   const clientState = {
@@ -72,12 +81,12 @@ wss.on("connection", client => {
         utteranceId = Date.now() + Math.random();
       }
 
-      console.log("ASR回调函数被调用，接收到文本:", userText, "Utterance ID:", utteranceId);
+      logger.info("ASR回调函数被调用", { userText, utteranceId });
 
       // Verify utterance ID to prevent duplicate processing
       const previousUtteranceId = clientCurrentUtteranceIds.get(clientState.id);
       if (previousUtteranceId && previousUtteranceId === utteranceId) {
-        console.log('检测到重复的utterance ID，跳过处理:', userText);
+        logger.info('检测到重复的utterance ID，跳过处理:', { userText });
         return;
       }
 
@@ -86,13 +95,13 @@ wss.on("connection", client => {
 
       // 确保WebSocket客户端对象存在
       if (!client) {
-        console.error('WebSocket客户端对象不存在');
+        logger.error('WebSocket客户端对象不存在');
         return;
       }
 
       // 使用处理锁防止同一ASR结果被重复处理
       if (clientState.asrProcessingLock) {
-        console.log('ASR正在处理中，跳过本次处理:', userText);
+        logger.info('ASR正在处理中，跳过本次处理:', { userText });
         return;
       }
 
@@ -101,13 +110,13 @@ wss.on("connection", client => {
       try {
         // 过滤掉可能的空白文本
         if (!userText || userText.trim() === '') {
-          console.log('忽略空白的ASR识别结果');
+          logger.info('忽略空白的ASR识别结果');
           return;
         }
 
         // 检查是否与上次处理的文本完全相同，避免完全重复的文本
         if (userText === clientState.lastProcessedText) {
-          console.log('检测到完全重复文本，跳过处理:', userText);
+          logger.info('检测到完全重复文本，跳过处理:', { userText });
           return;
         }
 
@@ -126,7 +135,7 @@ wss.on("connection", client => {
           // Only skip if the texts are essentially the same after cleaning
           // Allow different texts to be processed even if they're similar
           if (cleanCurrent === cleanPrevious) {
-            console.log('检测到标点差异的重复文本，跳过处理:', userText);
+            logger.info('检测到标点差异的重复文本，跳过处理:', { userText });
             return;
           }
 
@@ -144,14 +153,14 @@ wss.on("connection", client => {
               if (commonPrefix.length < Math.min(cleanCurrent.length, cleanPrevious.length) * 0.7) {
                 // 例如"你家什么" -> "你叫什么名字"，公共前缀"你"相对较短
                 // 这可能表明是识别错误的修正，保留较新的结果更为合理
-                console.log('检测到可能的识别修正，保留新文本:', userText, '而非旧文本:', clientState.lastProcessedText);
+                logger.info("检测到可能的识别修正", { newText: userText, oldText: clientState.lastProcessedText });
                 // 继续 processing with the new text, not return
               } else {
-                console.log('检测到延续或重复的相似文本，跳过处理:', userText);
+                logger.info('检测到延续或重复的相似文本，跳过处理:', { userText });
                 return;
               }
             } else {
-              console.log('检测到延续或重复的相似文本，跳过处理:', userText);
+              logger.info('检测到延续或重复的相似文本，跳过处理:', { userText });
               return;
             }
           }
@@ -160,7 +169,7 @@ wss.on("connection", client => {
           // 例如 "你家什么" 和 "你叫什么" 很相似，可能是同一个意图的不同识别
           const similarityRatio = calculateSimilarity(cleanCurrent, cleanPrevious);
           if (similarityRatio > 0.7 && similarityRatio < 1.0) { // Only skip if similar but not identical
-            console.log('检测到高相似度文本，跳过处理:', userText, 'vs', clientState.lastProcessedText, '相似度:', similarityRatio);
+            logger.info("检测到高相似度文本，跳过处理", { userText, lastProcessedText: clientState.lastProcessedText, similarityRatio });
             return;
           }
         }
@@ -172,7 +181,7 @@ wss.on("connection", client => {
         for (const msg of recentUserMessages) {
           // 检查是否与最近的消息相同或相似
           if (msg.content === userText) {
-            console.log('检测到与近期历史重复的文本，跳过处理:', userText);
+            logger.info('检测到与近期历史重复的文本，跳过处理:', { userText });
             return;
           }
 
@@ -182,7 +191,7 @@ wss.on("connection", client => {
 
           const similarityRatio = calculateSimilarity(cleanCurrent, cleanRecent);
           if (similarityRatio > 0.7) {
-            console.log('检测到与近期历史高相似度文本，跳过处理:', userText, 'vs', msg.content, '相似度:', similarityRatio);
+            logger.info("检测到与近期历史高相似度文本，跳过处理", { userText, recentText: msg.content, similarityRatio });
             return;
           }
         }
@@ -196,17 +205,15 @@ wss.on("connection", client => {
         clientState.lastProcessedText = userText;
         clientState.lastProcessedTime = currentTime;
 
-        console.log('收到ASR识别结果，准备发送到AI:', userText);
+        logger.info('收到ASR识别结果，准备发送到AI:', { userText });
 
-        console.log('收到完整的ASR识别结果，准备发送到AI:', userText);
+        logger.info('收到完整的ASR识别结果，准备发送到AI:', { userText });
 
         // 检查WebSocket客户端是否存在且连接
         if (!client || typeof client.readyState === 'undefined') {
-          console.error('WebSocket客户端状态无法检查');
+          logger.error('WebSocket客户端状态无法检查');
           return;
         }
-
-        console.log('WebSocket当前状态码:', client.readyState, 'OPEN状态码:', client.OPEN);
 
         // 向前端发送用户语音转文字结果
         const userMessageSent = await checkAndSendMessage(client, {
@@ -215,21 +222,17 @@ wss.on("connection", client => {
         });
 
         if (!userMessageSent) {
-          console.warn('无法发送用户消息到前端');
+          logger.warn('无法发送用户消息到前端');
           return;
         }
-        console.log('成功发送用户消息到前端:', userText);
+        logger.info('成功发送用户消息到前端:', { userText });
 
         // 将用户输入添加到该客户端的历史记录中
         history.push({ role: "user", content: userText });
 
-        console.log('【DEBUG-CONV】准备发送给AI模型的输入:', userText);
-        console.log('【DEBUG-CONV】当前对话历史长度:', history.length);
-
         try {
           const reply = await qwenChat(history);
-
-          console.log('【DEBUG-CONV】从AI模型收到的回复:', reply);
+          logger.info('AI生成回复:', { reply });
 
           // Add AI response to conversation history for continuity
           history.push({ role: "assistant", content: reply });
@@ -241,7 +244,7 @@ wss.on("connection", client => {
           if (clientLastReply) {
             // 如果距离上次回复不到2秒且内容相同，则跳过此次回复
             if (now - clientLastReply.timestamp < 2000 && clientLastReply.content === reply) {
-              console.log('检测到短时间内相同的AI回复，跳过发送:', reply);
+              logger.info('检测到短时间内相同的AI回复，跳过发送:', { reply });
               return;
             }
           }
@@ -281,12 +284,12 @@ wss.on("connection", client => {
               text: reply,
               audio: ""
             });
-            console.log('已发送AI文本回复到前端');
+            logger.info('TTS转换失败，仅发送文本回复', { reply });
           } else {
-            console.log('已发送AI回复到前端');
+            logger.info('TTS转换成功，已发送语音回复', { reply });
           }
         } catch (error) {
-          console.error('处理AI回复时出错:', error);
+          logger.error('AI回复处理失败', { error, reply: reply || 'N/A' });
 
           // 尝试发送错误消息到前端（如果连接可用）
           await checkAndSendMessage(client, {
@@ -303,7 +306,7 @@ wss.on("connection", client => {
 
     // 为ASR连接添加连接丢失处理
     clientState.asrSession.onConnectionLost = () => {
-      console.log('ASR连接丢失，正在快速重新创建连接...');
+      logger.info('ASR连接丢失，正在快速重新创建连接...');
 
       // 立即标记ASR为未就绪状态
       clientState.asrReady = false;
@@ -316,11 +319,11 @@ wss.on("connection", client => {
           if (client.readyState === client.OPEN) {
             initializeASRSession(); // 重新初始化ASR会话
           } else {
-            console.log('客户端WebSocket已关闭，不再重连ASR');
+            logger.info('客户端WebSocket已关闭，不再重连ASR');
           }
         }, 100); // 进一步减少重连延迟至100ms
       } else {
-        console.log('客户端WebSocket已关闭，不再重连ASR');
+        logger.info('客户端WebSocket已关闭，不再重连ASR');
       }
     };
 
@@ -333,7 +336,6 @@ wss.on("connection", client => {
   // Process queued messages once ASR is ready
   const processMessageQueue = () => {
     if (!clientState.asrSession || !clientState.asrSession.isReady || !clientState.asrSession.isReady()) {
-      console.log('ASR not ready, keeping messages queued');
       asrReadyState.ready = false;
       return;
     }
@@ -365,23 +367,23 @@ wss.on("connection", client => {
       const message = JSON.parse(data.toString());
 
       if (message.type === 'user_done_speaking') {
-        console.log('Received user completion signal');
+        logger.info('Received user completion signal');
 
         // Increment the interaction sequence to mark a clear boundary
         clientState.interactionSequence++;
         clientState.currentInteractionSeq = clientState.interactionSequence;
 
-        console.log('Interaction sequence updated to:', clientState.currentInteractionSeq);
+        logger.info('Interaction sequence updated to:', { currentInteractionSeq: clientState.currentInteractionSeq });
 
         // Notify ASR of audio end
         if (clientState.asrSession && clientState.asrSession.sendEndSignal) {
           // Before ending the signal, make sure we clear any pending timeouts
           // in the ASR connection that might interfere
-          console.log('Sending end signal to ASR session');
+          logger.info('Sending end signal to ASR session');
           clientState.asrSession.sendEndSignal();
 
         } else {
-          console.warn('ASR session not available when user done speaking');
+          logger.warn('ASR session not available when user done speaking');
         }
 
         return;
@@ -408,7 +410,6 @@ wss.on("connection", client => {
       forwardToASR(data);
     } else {
       // Queue the message if ASR is not ready and can't be restarted
-      console.log('ASR not ready, queuing audio message');
       clientState.messageQueue.push(data);
 
       // Attempt to process queue when ASR becomes ready
@@ -430,7 +431,7 @@ wss.on("connection", client => {
   });
 
   client.on("close", () => {
-    console.log("🔌 Client disconnected");
+    logger.info("🔌 Client disconnected");
     clientState.isConnected = false;
 
     // Clear the queue checker interval
@@ -450,8 +451,6 @@ wss.on("connection", client => {
 
   // Helper function to safely forward data to ASR
   function forwardToASR(data) {
-    console.log('Forwarding audio data to ASR');
-
     // Safely attempt to send audio data with proper state checking
     if (clientState.asrSession &&
         clientState.asrSession.sendAudioData &&
@@ -462,9 +461,9 @@ wss.on("connection", client => {
       // Use general send method as fallback
       clientState.asrSession.send(data);
     } else {
-      console.warn('ASR session not available, dropping audio data');
+      logger.warn('ASR session not available, dropping audio data');
     }
   }
 });
 
-console.log("✅ WebSocket ASR server running at ws://localhost:3001");
+logger.info("✅ WebSocket ASR server running at ws://localhost:3001");

@@ -2,9 +2,14 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import dotenv from "dotenv";
-import chatRoutes from './routes/chatRoutes.js'; // Import the new routes
+import path from "path";
+import { fileURLToPath } from "url";
 
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+import chatRoutes from './routes/chatRoutes.js';
+import logger from './utils/logger.js';
 
 const app = express();
 app.use(cors());
@@ -43,7 +48,7 @@ app.post("/api/tts", async (req, res) => {
     const audioUrl = ttsJson?.output?.audio?.url;
 
     if (!audioUrl) {
-      console.error("DashScope TTS response:", ttsJson);
+      logger.error("DashScope TTS response:", { response: ttsJson });
       return res.status(500).json({ error: "No audio URL returned" });
     }
 
@@ -61,11 +66,11 @@ app.post("/api/tts", async (req, res) => {
     audioResp.body.pipe(res);
 
   } catch (err) {
-    console.error("TTS error:", err);
+    logger.error("TTS error:", { error: err });
     res.status(500).json({ error: "TTS failed" });
   }
 });
 
 app.listen(3000, () => {
-  console.log("✅ Backend running at http://localhost:3000");
+  logger.info("✅ Backend server running at http://localhost:3000");
 });
