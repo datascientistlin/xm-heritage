@@ -175,7 +175,7 @@ footer {
     margin: 20px 0;
 }
 
-.voice-interaction-section, .image-interaction-section {
+.voice-interaction-section {
     display: flex;
     flex-direction: column;
     align-items: center;

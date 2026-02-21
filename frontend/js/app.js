@@ -2,7 +2,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // 获取DOM元素
     const chickenImg = document.getElementById('chicken-img');
     const voiceInteractBtn = document.getElementById('voice-interact-btn');
-    const imageInteractBtn = document.getElementById('image-interact-btn');
     const speechText = document.getElementById('speech-text');
     const speechBubble = document.getElementById('speech-bubble');
     const asrStatusIndicator = document.getElementById('asr-status-indicator');
@@ -17,6 +16,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 当前显示的图片索引
     let currentViewIndex = 0;
+
+    // 保存原始大湾鸡图片路径
+    const originalChickenSrc = 'assets/images/Front.jpeg';
 
     // WebSocket connection
     let ws;
@@ -212,18 +214,51 @@ document.addEventListener('DOMContentLoaded', function() {
         speak("你看我厉害吗？");
     }
 
-    // 点击大湾鸡图片的交互
+    // 点击大湾鸡图片的交互 - 显示体育图片并播放TTS
     chickenImg.addEventListener('click', function() {
         updateLastInteraction(); // 更新最后交互时间
-        playAnimation();
+        interactWithSports();
     });
 
     // 触摸事件（移动端优化）
     chickenImg.addEventListener('touchstart', function(e) {
         e.preventDefault(); // 防止默认的触摸行为
         updateLastInteraction(); // 更新最后交互时间
-        playAnimation();
+        interactWithSports();
     });
+
+    // 体育图片交互功能
+    function interactWithSports() {
+        // 体育图片列表
+        const sportsImages = [
+            '举重', '乒乓球', '体操', '冲浪', '击剑', '垒球', '射击', '射箭',
+            '帆船', '手球', '拳击', '排球', '摔跤', '攀岩', '曲棍球', '柔道',
+            '棒球', '橄榄球', '武术套路', '武术散打', '水球', '游泳', '滑板',
+            '现代五项', '田径', '皮划艇', '篮球', '网球', '羽毛球', '自行车',
+            '艺术体操', '花样游泳', '赛艇', '足球', '跆拳道', '跳水', '蹦床',
+            '铁人三项', '霹雳舞', '马拉松游泳', '马术', '高尔夫球'
+        ];
+
+        // 随机选择一个体育项目
+        const randomSport = sportsImages[Math.floor(Math.random() * sportsImages.length)];
+
+        // 显示体育图片
+        showSportsImage(randomSport);
+
+        // 播放TTS
+        speak(`我会${randomSport}，你可以吗？`);
+    }
+
+    // 显示体育图片 - 直接替换大湾鸡图片
+    function showSportsImage(sportName) {
+        // 直接替换大湾鸡图片为体育图片
+        chickenImg.src = `assets/images/Sports/${sportName}.png`;
+
+        // 5秒后恢复显示大湾鸡正面图
+        setTimeout(() => {
+            chickenImg.src = originalChickenSrc;
+        }, 5000);
+    }
 
     // 更新ASR状态显示
     function updateASRStatus(status) {
@@ -382,22 +417,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     ws.send(JSON.stringify({ type: 'user_done_speaking' }));
                 }
             }, 100);
-        }
-    });
-
-    // 图像互动按钮 - 循环切换动画和视图
-    let lastImageAction = 'animation'; // Track last action to alternate
-
-    imageInteractBtn.addEventListener('click', () => {
-        updateLastInteraction(); // 更新最后交互时间
-        if (lastImageAction === 'animation') {
-            // 执行动画
-            playAnimation();
-            lastImageAction = 'view'; // Next action will be to switch view
-        } else {
-            // 切换视图
-            switchChickenView();
-            lastImageAction = 'animation'; // Next action will be to play animation
         }
     });
 
