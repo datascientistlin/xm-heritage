@@ -3,16 +3,17 @@
  * 包含配置常量和辅助函数
  */
 
-// WebSocket 配置
+// WebSocket configuration - use relative URL for same-origin deployment
+const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 export const WS_CONFIG = {
-    URL: 'ws://localhost:3001',
+    URL: `${wsProtocol}//${window.location.host}/ws`,
     RECONNECT_DELAY: 3000,
     PING_INTERVAL: 30000
 };
 
-// TTS 配置
+// TTS configuration - use relative URL for same-origin deployment
 export const TTS_CONFIG = {
-    API_URL: 'http://localhost:3000/api/tts',
+    API_URL: '/api/tts',
     USE_QWEN_TTS: true,
     FALLBACK_RATE: 0.9,
     FALLBACK_PITCH: 1.2,
