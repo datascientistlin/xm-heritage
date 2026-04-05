@@ -3,42 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>大湾鸡互动陪伴</title>
+    <title>厦门非遗展示</title>
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <!-- 视频容器 - 开场视频 -->
+    <div id="video-container">
+        <video id="start-video" playsinline>
+            <source src="assets/start_video.mp4" type="video/mp4">
+        </video>
+    </div>
+
     <!-- 装饰元素容器 -->
     <div class="decoration-dots">
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="star"></div>
-        <div class="star"></div>
-        <div class="star"></div>
-        <div class="star"></div>
+        <div class="shell"></div>
+        <div class="shell"></div>
+        <div class="shell"></div>
+        <div class="shell"></div>
+        <div class="shell"></div>
+        <div class="shell"></div>
+        <div class="shell"></div>
+        <div class="shell"></div>
     </div>
 
     <div class="container">
         <!-- 欢迎标题 -->
         <header>
-            <h1>欢迎来到大湾鸡的世界！</h1>
+            <h1>欢迎来到厦门非遗的世界！</h1>
         </header>
 
         <main>
-            <!-- 大湾鸡图片 - 点击触发体育互动 -->
+            <!-- 小讲解员图片 - 点击触发作品欣赏 -->
             <div class="chicken-container">
-                <img id="chicken-img" src="assets/images/Front.jpeg" alt="大湾鸡" class="chicken-img">
+                <img id="chicken-img" src="assets/images/start.jpeg" alt="小讲解员" class="chicken-img">
             </div>
 
             <!-- 对话气泡/聊天记录 -->
             <div class="speech-bubble" id="speech-bubble">
-                <p id="speech-text">你好！我是大湾鸡，很高兴见到你！</p>
+                <p id="speech-text">你好！我是厦门非遗小讲解员，很高兴见到你！</p>
             </div>
 
             <div id="chat-log" class="chat-log"></div>
@@ -55,7 +58,7 @@
         </main>
 
         <footer>
-            <p>点击大湾鸡一起运动吧！</p>
+            <p>点击小讲解员一起欣赏厦门非遗作品吧！</p>
         </footer>
     </div>
 

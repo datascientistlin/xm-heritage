@@ -20,44 +20,41 @@ export const TTS_CONFIG = {
     FALLBACK_VOLUME: 1
 };
 
-// 大湾鸡图片配置
-export const CHICKEN_CONFIG = {
+// 小讲解员图片配置
+export const GUIDE_CONFIG = {
+    NAME: '小讲解员',
     VIEWS: [
-        'assets/images/Front.jpeg',
-        'assets/images/Back.jpeg',
-        'assets/images/Side.jpeg'
+        'assets/images/start.jpeg',
+        'assets/images/start.jpeg',
+        'assets/images/start.jpeg'
     ],
-    ORIGINAL_SRC: 'assets/images/Front.jpeg',
-    SPORTS_DIR: 'assets/images/Sports/'
+    ORIGINAL_SRC: 'assets/images/start.jpeg',
+    WORKS_DIR: 'assets/images/works/'
 };
 
-// 预设的大湾鸡话语
-export const CHICKEN_RESPONSES = [
-    "你好呀小朋友！",
-    "我喜欢和你一起玩！",
-    "今天天气真好呢！",
-    "我们一起唱歌吧！",
-    "咯咯咯~",
-    "你今天开心吗？",
-    "我可以陪你聊天哦！",
-    "要不要听个故事？",
-    "我最喜欢小朋友啦！",
-    "我们做好朋友吧！"
+// 预设的话语（厦门非遗主题）
+export const GUIDE_RESPONSES = [
+    "你知道吗？厦门的非遗项目有好多好多呢！",
+    "闽南文化真的好有趣啊！",
+    "古时候的人留下了很多珍贵的文化遗产！",
+    "厦门非遗需要我们一起保护和传承！",
+    "你想了解哪个厦门非遗项目呢？",
+    "南音是厦门的传统音乐，像古代人的歌曲！",
+    "歌仔戏是厦门特有的戏曲，好看极了！",
+    "每一种非遗都是独一无二的！",
+    "我最喜欢看闽南的传统工艺了！",
+    "你想亲自体验厦门非遗吗？"
 ];
 
-// 体育项目列表
+// 厦门非遗作品列表（对应works目录中的图片文件名，不含扩展名）
 export const SPORTS_LIST = [
-    '举重', '乒乓球', '体操', '冲浪', '击剑', '垒球', '射击', '射箭',
-    '帆船', '手球', '拳击', '排球', '摔跤', '攀岩', '曲棍球', '柔道',
-    '棒球', '橄榄球（7人制橄榄球）', '武术套路', '武术散打', '水球', '游泳', '滑板',
-    '田径', '皮划艇（静水）', '篮球', '网球', '羽毛球', '自行车',
-    '艺术体操', '花样游泳', '赛艇', '足球', '跆拳道', '跳水', '蹦床',
-    '铁人三项', '霹雳舞', '马拉松游泳', '马术', '高尔夫球'
+    '凤冠', '螺钿琴'
 ];
 
-// 随机说话间隔（毫秒）
-export const RANDOM_SPEAK_INTERVAL = 30000;
-export const RANDOM_SPEAK_THRESHOLD = 30000;
+// 随机说话间隔（毫秒）= 50秒
+export const RANDOM_SPEAK_INTERVAL = 50000;
+// 随机说话触发阈值（毫秒）= 50秒无用户操作
+export const RANDOM_SPEAK_THRESHOLD = 50000;
 export const RANDOM_SPEAK_CHANCE = 0.7;
 
 // 音频配置

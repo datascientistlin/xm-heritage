@@ -1,12 +1,13 @@
 /**
  * UI 控制器模块
- * 处理界面交互、动画和大湾鸡角色的显示
+ * 处理界面交互、动画和小讲解员的显示
  */
 
 import {
-    CHICKEN_CONFIG,
-    CHICKEN_RESPONSES,
+    GUIDE_CONFIG,
+    GUIDE_RESPONSES,
     SPORTS_LIST,
+    RANDOM_SPEAK_INTERVAL,
     RANDOM_SPEAK_THRESHOLD,
     RANDOM_SPEAK_CHANCE,
     debugLog,
@@ -15,19 +16,23 @@ import {
 
 /**
  * UI 控制器类
- * 管理用户界面交互和大湾鸡角色动画
+ * 管理用户界面交互和小讲解员动画
  */
 export class UIController {
     /**
      * @param {Object} dependencies - 依赖的模块
      * @param {SpeechSynthesizer} dependencies.synthesizer - 语音合成器
+     * @param {Function} [dependencies.onInteraction] - 用户交互回调
+     * @param {Function} [dependencies.isAppActive] - 检查应用是否处于活动状态
      */
-    constructor({ synthesizer }) {
+    constructor({ synthesizer, onInteraction, isAppActive }) {
         this.synthesizer = synthesizer;
+        this.onInteraction = onInteraction || (() => {});
+        this.isAppActive = isAppActive || (() => true);
 
         // DOM 元素引用
         this.elements = {
-            chickenImg: document.getElementById('chicken-img'),
+            guideImg: document.getElementById('chicken-img'),
             voiceBtn: document.getElementById('voice-btn'),
             speechText: document.getElementById('speech-text'),
             speechBubble: document.getElementById('speech-bubble'),
@@ -40,6 +45,7 @@ export class UIController {
         // 状态变量
         this.currentViewIndex = 0;
         this.lastInteractionTime = Date.now();
+        this.randomSpeakInterval = null; // 存储随机说话 interval ID
 
         // 可用的动画列表
         this.animations = ['bounce', 'wiggle', 'eye-blink', 'talk-animation'];
@@ -60,27 +66,29 @@ export class UIController {
      * 绑定事件处理器
      */
     bindEvents() {
-        const { chickenImg, voiceBtn } = this.elements;
+        const { guideImg, voiceBtn } = this.elements;
 
-        // 点击大湾鸡图片
-        chickenImg.addEventListener('click', () => {
+        // 点击小讲解员图片
+        guideImg.addEventListener('click', () => {
+            this.onInteraction();
             this.updateLastInteraction();
-            this.interactWithSports();
+            this.interactWithWorks();
         });
 
-        // 触摸大湾鸡图片（移动端）
-        chickenImg.addEventListener('touchstart', (e) => {
+        // 触摸小讲解员图片（移动端）
+        guideImg.addEventListener('touchstart', (e) => {
             e.preventDefault();
+            this.onInteraction();
             this.updateLastInteraction();
-            this.interactWithSports();
+            this.interactWithWorks();
         });
     }
 
     /**
-     * 预加载大湾鸡图片
+     * 预加载小讲解员图片
      */
     preloadImages() {
-        CHICKEN_CONFIG.VIEWS.forEach(src => {
+        GUIDE_CONFIG.VIEWS.forEach(src => {
             const img = new Image();
             img.src = src;
         });
@@ -95,7 +103,14 @@ export class UIController {
     }
 
     /**
-     * 检查是否可以随机说话
+     * 重置最后交互时间（用于进入主应用时）
+     */
+    resetLastInteractionTime() {
+        this.lastInteractionTime = Date.now();
+    }
+
+    /**
+     * 检查是否可以随机说话（基于用户无操作时间）
      * @returns {boolean}
      */
     canSpeakRandomly() {
@@ -105,47 +120,11 @@ export class UIController {
     }
 
     /**
-     * 让大湾鸡说随机话语
+     * 让小讲解员说随机话语（不重置任何计时器）
      */
-    chickenSaySomething() {
-        this.updateLastInteraction();
-        const response = getRandomItem(CHICKEN_RESPONSES);
-        this.updateSpeechBubble(response);
-        this.synthesizer.speak(response);
-    }
-
-    /**
-     * 切换大湾鸡视图（正面/背面/侧面）
-     */
-    switchChickenView() {
-        this.updateLastInteraction();
-        this.currentViewIndex = (this.currentViewIndex + 1) % CHICKEN_CONFIG.VIEWS.length;
-
-        const { chickenImg } = this.elements;
-        chickenImg.src = CHICKEN_CONFIG.VIEWS[this.currentViewIndex];
-
-        // 淡入效果
-        chickenImg.style.opacity = '0';
-        setTimeout(() => {
-            chickenImg.style.opacity = '1';
-        }, 100);
-
-        // 根据视图给出不同回应
-        let response;
-        switch (this.currentViewIndex) {
-            case 0:
-                response = '这是我的正面照，好看吗？';
-                break;
-            case 1:
-                response = '这是我的背面，你觉得像什么？';
-                break;
-            case 2:
-                response = '这是我的侧面，是不是很可爱？';
-                break;
-            default:
-                response = getRandomItem(CHICKEN_RESPONSES);
-        }
-
+    guideSpeak() {
+        // 不调用 updateLastInteraction() - 随机说话不重置用户交互计时器
+        const response = getRandomItem(GUIDE_RESPONSES);
         this.updateSpeechBubble(response);
         this.synthesizer.speak(response);
     }
@@ -155,40 +134,40 @@ export class UIController {
      */
     playAnimation() {
         this.updateLastInteraction();
-        const { chickenImg } = this.elements;
+        const { guideImg } = this.elements;
 
         // 随机选择动画
         const randomAnimation = getRandomItem(this.animations);
 
         // 移除所有动画
         this.animations.forEach(anim => {
-            chickenImg.classList.remove(anim);
+            guideImg.classList.remove(anim);
         });
 
         // 添加新动画
-        chickenImg.classList.add(randomAnimation);
+        guideImg.classList.add(randomAnimation);
 
         // 2秒后移除动画
         setTimeout(() => {
-            chickenImg.classList.remove(randomAnimation);
+            guideImg.classList.remove(randomAnimation);
         }, 2000);
 
-        const response = '你看我厉害吗？';
+        const response = '你看厦门非遗多美啊！';
         this.updateSpeechBubble(response);
         this.synthesizer.speak(response);
     }
 
     /**
-     * 体育图片交互
+     * 作品欣赏交互
      */
-    interactWithSports() {
-        // 过滤掉空字符串
-        const validSports = SPORTS_LIST.filter(s => s.trim() !== '');
-        const sport = getRandomItem(validSports);
-        const speechText = `我会${sport}，你可以吗？`;
+    interactWithWorks() {
+        // 动态获取 works 目录中的图片
+        const validWorks = SPORTS_LIST.filter(s => s.trim() !== '');
+        const work = getRandomItem(validWorks);
+        const speechText = `这是厦门非遗${work}，它很漂亮吧！`;
 
-        // 显示运动图片
-        this.showSportsImage(sport);
+        // 显示作品图片
+        this.showWorkImage(work);
 
         // 只更新对话气泡，不添加到聊天记录
         this.updateSpeechBubble(speechText);
@@ -197,20 +176,21 @@ export class UIController {
     }
 
     /**
-     * 显示体育图片
-     * @param {string} sportName - 体育项目名称
+     * 显示作品图片
+     * @param {string} workName - 作品名称（不含扩展名）
      */
-    showSportsImage(sportName) {
-        const { chickenImg } = this.elements;
-        // URL编码文件名，处理中文和特殊字符
-        const encodedName = encodeURIComponent(sportName);
-        chickenImg.src = `${CHICKEN_CONFIG.SPORTS_DIR}${encodedName}.png`;
+    showWorkImage(workName) {
+        const { guideImg } = this.elements;
+        // works目录中的图片已经是中文名，直接使用
+        const imagePath = `${GUIDE_CONFIG.WORKS_DIR}${workName}.jpg`;
 
-        debugLog('UI', '🏃 显示运动图片:', `${CHICKEN_CONFIG.SPORTS_DIR}${encodedName}.png`);
+        guideImg.src = imagePath;
+
+        debugLog('UI', '🎨 显示作品图片:', imagePath);
 
         // 5秒后恢复原图
         setTimeout(() => {
-            chickenImg.src = CHICKEN_CONFIG.ORIGINAL_SRC;
+            guideImg.src = GUIDE_CONFIG.ORIGINAL_SRC;
             debugLog('UI', '🔄 恢复原图');
         }, 5000);
     }
@@ -273,6 +253,32 @@ export class UIController {
     }
 
     /**
+     * 重置对话气泡为默认文本
+     */
+    resetSpeechBubble() {
+        const { speechText } = this.elements;
+        speechText.textContent = '你好！我是厦门非遗小讲解员，很高兴见到你！';
+        debugLog('UI', '💭 重置对话气泡');
+    }
+
+    /**
+     * 清空聊天记录
+     */
+    clearChatLog() {
+        const { chatLog } = this.elements;
+        chatLog.innerHTML = '';
+        debugLog('UI', '🗑️ 清空聊天记录');
+    }
+
+    /**
+     * 重置所有UI状态（进入主界面时调用）
+     */
+    resetUIState() {
+        this.resetSpeechBubble();
+        this.clearChatLog();
+    }
+
+    /**
      * 更新语音按钮状态
      * @param {boolean} isRecording - 是否正在录音
      */
@@ -292,16 +298,20 @@ export class UIController {
 
     /**
      * 启动定期随机说话
+     * 只有在应用处于活动状态、用户无操作超过阈值时才触发
      */
     startRandomSpeaking() {
-        setInterval(() => {
-            // 检查条件：未录音、可随机说话、未在说话
-            if (!this.synthesizer.isCurrentlySpeaking() &&
-                this.canSpeakRandomly() &&
-                Math.random() > RANDOM_SPEAK_CHANCE) {
-                this.chickenSaySomething();
+        // 清除已存在的 interval，防止重复创建
+        if (this.randomSpeakInterval) {
+            clearInterval(this.randomSpeakInterval);
+        }
+
+        this.randomSpeakInterval = setInterval(() => {
+            // 检查：应用处于活动状态 AND 未在说话 AND 用户无操作时间超过阈值
+            if (this.isAppActive() && !this.synthesizer.isCurrentlySpeaking() && this.canSpeakRandomly()) {
+                this.guideSpeak();
             }
-        }, RANDOM_SPEAK_THRESHOLD);
+        }, RANDOM_SPEAK_INTERVAL);
     }
 
     /**
@@ -309,8 +319,8 @@ export class UIController {
      */
     showWelcomeMessage() {
         setTimeout(() => {
-            this.updateLastInteraction();
-            const welcomeText = '你好！我是大湾鸡，很高兴见到你！';
+            // 欢迎语是自动播放的，不应重置用户交互计时器
+            const welcomeText = '你好！我是厦门非遗小讲解员，很高兴见到你！';
             this.updateSpeechBubble(welcomeText);
             this.synthesizer.speak(welcomeText);
         }, 1000);

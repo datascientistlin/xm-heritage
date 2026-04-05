@@ -89,7 +89,7 @@ const logger = winston.createLogger({
 
 // 启动时记录日志
 logger.info('='.repeat(50));
-logger.info('大湾鸡应用启动');
+logger.info('厦门非遗展示应用启动');
 logger.info(`日志目录: ${logDir}`);
 logger.info(`日志级别: ${logger.level}`);
 logger.info('='.repeat(50));

@@ -187,6 +187,17 @@ export class SpeechSynthesizer {
     }
 
     /**
+     * 取消当前语音
+     */
+    cancel() {
+        if (this.speechSynthesis) {
+            this.speechSynthesis.cancel();
+            this.isSpeaking = false;
+            debugLog('TTS', '⏹ 停止语音');
+        }
+    }
+
+    /**
      * 预加载语音列表（某些浏览器需要）
      */
     preloadVoices() {

@@ -1,4 +1,4 @@
-/* 糖果色系简单垂直布局样式 */
+/* 东方雅致色系样式 */
 * {
     margin: 0;
     padding: 0;
@@ -7,8 +7,8 @@
 
 body {
     font-family: 'Comic Sans MS', 'Arial Rounded MT Bold', 'YouYuan', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-    /* 柔和的粉色到浅蓝色渐变背景 */
-    background: linear-gradient(180deg, #FFE5EC 0%, #E8F4FD 50%, #E0F4FF 100%);
+    /* 米白到浅金渐变背景 */
+    background: linear-gradient(180deg, #FFF8E7 0%, #F5E6D3 50%, #E8D5B7 100%);
     min-height: 100vh;
     display: flex;
     justify-content: center;
@@ -18,7 +18,7 @@ body {
     position: relative;
 }
 
-/* 装饰元素 - 漂浮的彩色圆点 */
+/* 装饰元素 - 漂浮的贝壳形状 */
 .decoration-dots {
     position: fixed;
     top: 0;
@@ -30,154 +30,121 @@ body {
     overflow: hidden;
 }
 
-.dot {
+.shell {
     position: absolute;
-    border-radius: 50%;
-    opacity: 0.6;
-    animation: float 6s ease-in-out infinite;
+    opacity: 0.5;
+    animation: float 8s ease-in-out infinite;
 }
 
-.dot:nth-child(1) {
-    width: 30px;
-    height: 30px;
-    background: #FFB6C1;
-    top: 10%;
-    left: 10%;
+/* 贝壳形状使用椭圆和伪元素组合 */
+.shell::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #C9A86C 0%, #D4A574 50%, #E8D5B7 100%);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    box-shadow: inset -3px -3px 8px rgba(0,0,0,0.1), inset 3px 3px 8px rgba(255,255,255,0.3);
+}
+
+.shell:nth-child(1) {
+    width: 40px;
+    height: 35px;
+    top: 8%;
+    left: 12%;
     animation-delay: 0s;
 }
 
-.dot:nth-child(2) {
-    width: 20px;
-    height: 20px;
-    background: #B4E7CE;
-    top: 20%;
-    left: 80%;
+.shell:nth-child(2) {
+    width: 30px;
+    height: 25px;
+    top: 18%;
+    left: 78%;
     animation-delay: 1s;
 }
 
-.dot:nth-child(3) {
-    width: 25px;
-    height: 25px;
-    background: #FFE082;
-    top: 60%;
-    left: 5%;
+.shell:nth-child(3) {
+    width: 35px;
+    height: 30px;
+    top: 55%;
+    left: 6%;
     animation-delay: 2s;
 }
 
-.dot:nth-child(4) {
-    width: 15px;
-    height: 15px;
-    background: #B39DDB;
-    top: 80%;
-    left: 85%;
+.shell:nth-child(4) {
+    width: 25px;
+    height: 22px;
+    top: 75%;
+    left: 82%;
     animation-delay: 0.5s;
 }
 
-.dot:nth-child(5) {
-    width: 35px;
-    height: 35px;
-    background: #F8BBD9;
-    top: 40%;
-    left: 90%;
+.shell:nth-child(5) {
+    width: 45px;
+    height: 38px;
+    top: 35%;
+    left: 88%;
     animation-delay: 1.5s;
 }
 
-.dot:nth-child(6) {
-    width: 18px;
-    height: 18px;
-    background: #81D4FA;
+.shell:nth-child(6) {
+    width: 28px;
+    height: 24px;
     top: 5%;
-    left: 50%;
+    left: 55%;
     animation-delay: 2.5s;
 }
 
-.dot:nth-child(7) {
-    width: 22px;
-    height: 22px;
-    background: #A5D6A7;
-    top: 70%;
-    left: 15%;
+.shell:nth-child(7) {
+    width: 32px;
+    height: 28px;
+    top: 65%;
+    left: 18%;
     animation-delay: 3s;
 }
 
-.dot:nth-child(8) {
-    width: 28px;
-    height: 28px;
-    background: #FFAB91;
-    top: 30%;
-    left: 3%;
+.shell:nth-child(8) {
+    width: 38px;
+    height: 33px;
+    top: 28%;
+    left: 5%;
     animation-delay: 3.5s;
 }
 
 @keyframes float {
     0%, 100% {
-        transform: translateY(0) translateX(0);
+        transform: translateY(0) translateX(0) rotate(0deg);
     }
     25% {
-        transform: translateY(-20px) translateX(10px);
+        transform: translateY(-15px) translateX(8px) rotate(5deg);
     }
     50% {
-        transform: translateY(-10px) translateX(-5px);
+        transform: translateY(-8px) translateX(-4px) rotate(-3deg);
     }
     75% {
-        transform: translateY(-25px) translateX(5px);
+        transform: translateY(-20px) translateX(4px) rotate(3deg);
     }
 }
 
-/* 星星装饰 */
-.star {
+/* 光泽效果 - 模拟贝壳的反光 */
+.shell::after {
+    content: '';
     position: absolute;
-    width: 20px;
-    height: 20px;
-    background: #FFD700;
-    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
-    animation: twinkle 2s ease-in-out infinite;
-}
-
-.star:nth-child(9) {
-    top: 15%;
+    top: 20%;
     left: 25%;
-    animation-delay: 0.3s;
-}
-
-.star:nth-child(10) {
-    top: 25%;
-    left: 70%;
-    animation-delay: 0.8s;
-    transform: scale(0.7);
-}
-
-.star:nth-child(11) {
-    top: 55%;
-    left: 88%;
-    animation-delay: 1.3s;
-    transform: scale(0.5);
-}
-
-.star:nth-child(12) {
-    top: 75%;
-    left: 30%;
-    animation-delay: 1.8s;
-    transform: scale(0.6);
-}
-
-@keyframes twinkle {
-    0%, 100% {
-        opacity: 0.3;
-        transform: scale(0.8) rotate(0deg);
-    }
-    50% {
-        opacity: 1;
-        transform: scale(1.2) rotate(180deg);
-    }
+    width: 30%;
+    height: 30%;
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    filter: blur(2px);
 }
 
 .container {
     width: 95%;
     max-width: 500px;
-    background-color: rgba(255, 255, 255, 0.85);
+    background-color: rgba(255, 255, 255, 0.9);
     border-radius: 30px;
-    box-shadow: 0 15px 40px rgba(255, 107, 157, 0.2);
+    box-shadow: 0 15px 40px rgba(201, 168, 108, 0.25);
     overflow-x: hidden;
     overflow-y: auto;
     display: flex;
@@ -194,10 +161,10 @@ header {
 }
 
 header h1 {
-    /* 糖果粉标题色 */
-    color: #FF6B9D;
+    /* 贝壳金标题色 */
+    color: #C9A86C;
     font-size: 1.8rem;
-    text-shadow: 2px 2px 4px rgba(255, 107, 157, 0.3);
+    text-shadow: 2px 2px 4px rgba(201, 168, 108, 0.3);
     letter-spacing: 2px;
 }
 
@@ -212,7 +179,7 @@ main {
     gap: 20px;
 }
 
-/* 大湾鸡图片容器 */
+/* 小讲解员图片容器 */
 .chicken-container {
     position: relative;
     width: 250px;
@@ -220,23 +187,21 @@ main {
     display: flex;
     justify-content: center;
     align-items: center;
-    /* 可爱边框和阴影 */
-    border: 5px solid #FFB6C1;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #FFF5F7 0%, #FFF9FB 100%);
-    box-shadow: 0 8px 25px rgba(255, 107, 157, 0.3);
+    /* 贝壳金边框和阴影 */
+    border: 5px solid #D4A574;
+    background: linear-gradient(135deg, #FFF8E7 0%, #F5E6D3 100%);
+    box-shadow: 0 8px 25px rgba(201, 168, 108, 0.35);
     transition: all 0.3s ease;
 }
 
 .chicken-container:hover {
     transform: scale(1.02);
-    box-shadow: 0 12px 35px rgba(255, 107, 157, 0.4);
+    box-shadow: 0 12px 35px rgba(201, 168, 108, 0.45);
 }
 
 .chicken-img {
     max-width: 90%;
     max-height: 90%;
-    border-radius: 50%;
     transition: transform 0.3s ease, opacity 0.3s ease;
     cursor: pointer;
 }
@@ -269,20 +234,20 @@ main {
 
 /* 对话气泡 */
 .speech-bubble {
-    /* 奶白色带彩色边框 */
-    background-color: #FFFEF0;
+    /* 米白色带玉石绿边框 */
+    background-color: #FFFEF5;
     border-radius: 25px;
     padding: 18px 28px;
-    box-shadow: 0 4px 15px rgba(255, 182, 193, 0.4);
+    box-shadow: 0 4px 15px rgba(201, 168, 108, 0.3);
     max-width: 90%;
     text-align: center;
-    border: 3px solid #B4E7CE;
+    border: 3px solid #6B8E7B;
     width: 100%;
 }
 
 .speech-bubble p {
     font-size: 1.15rem;
-    color: #555;
+    color: #5D4E37;
     margin: 0;
     line-height: 1.5;
 }
@@ -292,23 +257,23 @@ main {
     width: 100%;
     max-height: 150px;
     overflow-y: auto;
-    background: #FFFEF0;
+    background: #FFFEF5;
     border-radius: 15px;
     padding: 12px;
     font-size: 0.95rem;
-    border: 2px solid #FFE082;
+    border: 2px solid #C9A86C;
 }
 
 #chat-log .user {
     text-align: right;
-    color: #7ED6A3;
+    color: #6B8E7B;
     margin: 6px 0;
     font-weight: bold;
 }
 
 #chat-log .assistant {
     text-align: left;
-    color: #FF6B9D;
+    color: #C9A86C;
     margin: 6px 0;
     font-weight: bold;
 }
@@ -340,16 +305,16 @@ main {
 }
 
 .status-indicator.connected {
-    background-color: #7ED6A3;
+    background-color: #6B8E7B;
 }
 
 .status-indicator.connecting {
-    background-color: #FFE082;
+    background-color: #C9A86C;
     animation: pulse 1.5s infinite;
 }
 
 .status-indicator.disconnected {
-    background-color: #FF8A80;
+    background-color: #D4A574;
 }
 
 /* 超大圆形语音按钮 - 80px直径 */
@@ -358,13 +323,13 @@ main {
     height: 80px;
     border-radius: 50%;
     border: none;
-    /* 糖果绿带渐变 */
-    background: linear-gradient(135deg, #7ED6A3 0%, #56AB91 100%);
+    /* 玉石绿带渐变 */
+    background: linear-gradient(135deg, #6B8E7B 0%, #5A7A6A 100%);
     color: white;
     font-size: 2rem;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 6px 20px rgba(126, 214, 163, 0.5);
+    box-shadow: 0 6px 20px rgba(107, 142, 123, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -372,7 +337,7 @@ main {
 
 .voice-btn:hover {
     transform: scale(1.1);
-    box-shadow: 0 8px 25px rgba(126, 214, 163, 0.6);
+    box-shadow: 0 8px 25px rgba(107, 142, 123, 0.6);
 }
 
 .voice-btn:active {
@@ -380,9 +345,9 @@ main {
 }
 
 .voice-btn.recording {
-    background: linear-gradient(135deg, #FF8A80 0%, #FF5252 100%);
+    background: linear-gradient(135deg, #D4A574 0%, #C9A86C 100%);
     animation: pulse-btn 1s infinite;
-    box-shadow: 0 6px 20px rgba(255, 82, 82, 0.5);
+    box-shadow: 0 6px 20px rgba(201, 168, 108, 0.5);
 }
 
 @keyframes pulse-btn {
@@ -397,14 +362,36 @@ main {
 .voice-btn-text {
     font-size: 0.8rem;
     margin-top: 8px;
-    color: #666;
+    color: #5D4E37;
+}
+
+/* 视频容器样式 */
+#video-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(180deg, #FFF8E7 0%, #F5E6D3 50%, #E8D5B7 100%);
+    z-index: 1000;
+    cursor: pointer;
+}
+
+#video-container video {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
 }
 
 /* 底部提示 */
 footer {
     text-align: center;
     padding: 15px 0 5px;
-    color: #999;
+    color: #8B7355;
     font-size: 0.9rem;
 }
 
@@ -469,7 +456,7 @@ footer {
     }
 
     /* 移动端隐藏小装饰 */
-    .dot, .star {
-        opacity: 0.4;
+    .shell {
+        opacity: 0.3;
     }
 }
