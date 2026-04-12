@@ -127,6 +127,12 @@ export class UIController {
         const response = getRandomItem(GUIDE_RESPONSES);
         this.updateSpeechBubble(response);
         this.synthesizer.speak(response);
+
+        // 5秒后重置文字
+        setTimeout(() => {
+            this.resetSpeechBubble();
+            debugLog('UI', '🔄 随机话语说完后重置文字');
+        }, 5000);
     }
 
     /**
@@ -155,6 +161,12 @@ export class UIController {
         const response = '你看厦门非遗多美啊！';
         this.updateSpeechBubble(response);
         this.synthesizer.speak(response);
+
+        // 5秒后重置文字
+        setTimeout(() => {
+            this.resetSpeechBubble();
+            debugLog('UI', '🔄 动画说完后重置文字');
+        }, 5000);
     }
 
     /**
@@ -191,6 +203,7 @@ export class UIController {
         // 5秒后恢复原图
         setTimeout(() => {
             guideImg.src = GUIDE_CONFIG.ORIGINAL_SRC;
+            this.resetSpeechBubble();
             debugLog('UI', '🔄 恢复原图');
         }, 5000);
     }
